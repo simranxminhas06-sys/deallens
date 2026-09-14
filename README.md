@@ -137,7 +137,12 @@ OpenAI Responses API function tools:
 - `calculate_combined_metric` — pro-forma combined metric with an optional synergy/dis-synergy adjustment
 - `search_uploaded_documents` — semantic search over the uploaded documents (via the vector store), so later stages can pull evidence without re-running full file_search
 - `save_analysis` / `load_analysis` — SQLite persistence ([`db/database.py`](db/database.py))
-- `generate_report` — assembles the final cited Markdown report ([`tools/report_generator.py`](tools/report_generator.py))
+- `generate_report` — assembles the final cited Markdown report ([`tools/report_generator.py`](tools/report_generator.py)),
+  also available as a PDF ([`tools/pdf_generator.py`](tools/pdf_generator.py)) or a 10-12 slide IC
+  deck ([`tools/pptx_generator.py`](tools/pptx_generator.py)) — title, verdict banner, deal
+  economics, company profiles, opportunity/risk tables, 100-day plan, and reviewer notes, styled
+  to match the app's navy/blue theme and downloadable from Executive Summary. Deal teams hand
+  slides upward, not PDFs, so this is the version someone would actually present.
 
 The model is instructed to never do arithmetic in prose — every numeric
 estimate must come from a logged tool call, which the reviewer stage then
@@ -244,6 +249,9 @@ assumption slider on Independent Assessments updates them immediately.
   real bug: every scenario-slider drag saves, so without this a session of
   normal use would flood "Saved analyses" with duplicates), and a reloaded
   record's id survives so the next save still updates in place.
+- `tests/test_pptx_generator.py` — the IC deck generator produces a valid `.pptx` (a well-formed
+  OOXML zip) against the demo record, with a review, without one, with no opportunities/risks, and
+  with special characters (`&`, `<`, `"`) in free text that could otherwise break XML generation.
 
 Run them with:
 
@@ -309,7 +317,7 @@ adjust any slider:
 - **5. Risk Register** — sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
 - **6. Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture
 - **7. 100-Day Plan** — the phased integration plan, guiding principles, and governance — the execution plan for a deal you've decided to proceed with
-- **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report
+- **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report or PowerPoint IC deck
 - **9. Evidence Trail** — every claim traced to its citation
 - **10. Tables** — every structured table in the analysis (company profiles, financial baseline, opportunities, integration actions, reviewer issues) in one place
 
@@ -347,9 +355,10 @@ Staged so each piece is working before the next is added:
 5. ✅ **Deal economics and synergy ramp/cost-to-achieve** — value creation is compared against the deal's purchase price (captured on Create Analysis but previously unused anywhere in the pipeline), and each opportunity phases in over a 3-year ramp net of a one-time cost to achieve, instead of a single undiscounted run-rate number (this version).
 6. ✅ **Risk likelihood x impact scoring** — the risk register is a composite 1-9 score (likelihood x impact), sorted highest first, instead of a single severity label (this version).
 7. ✅ **Evidence Trail** — pick any claim-bearing item (a profile, the rationale, an opportunity, a risk, an agent's key findings) and see each underlying claim, color-coded by claim type, with the exact citation it rests on or a note that it has none (this version).
-8. ✅ **PDF report export** — a formatted PDF (`tools/pdf_generator.py`, pure Python via reportlab, no system-binary dependency) alongside the existing Markdown download, with the same Recommendation/Deal Economics/ramp sections (this version).
-9. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-10. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+8. ✅ **PDF report export** — a formatted PDF (`tools/pdf_generator.py`, pure Python via reportlab, no system-binary dependency) alongside the existing Markdown download, with the same Recommendation/Deal Economics/ramp sections.
+9. ✅ **PowerPoint IC deck export** — a 10-12 slide deck (`tools/pptx_generator.py`, pure `python-pptx`) alongside the Markdown/PDF report, styled to match the app's theme — the format a deal team actually presents, not just files (this version).
+10. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+11. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

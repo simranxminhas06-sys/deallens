@@ -27,6 +27,7 @@ from db.database import list_analyses, load_analysis, save_analysis
 from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions, VerdictLevel
 from tools.financial_calculator import TOOL_FUNCTIONS, calculate_deal_economics, calculate_ramp_adjusted_value
 from tools.pdf_generator import generate_pdf
+from tools.pptx_generator import generate_pptx
 from tools.report_generator import generate_report
 
 st.set_page_config(page_title="DealLens", layout="wide", page_icon="📊")
@@ -672,12 +673,19 @@ elif page == "8. Executive Summary":
         st.info("Executive summary not yet generated.")
 
     st.divider()
-    dl_cols = st.columns(2)
+    dl_cols = st.columns(3)
     report_md = generate_report(record)
     dl_cols[0].download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
     report_pdf = generate_pdf(record)
     dl_cols[1].download_button(
         "Download full report (PDF)", report_pdf, file_name="deallens_report.pdf", mime="application/pdf"
+    )
+    report_pptx = generate_pptx(record)
+    dl_cols[2].download_button(
+        "Download IC deck (PowerPoint)",
+        report_pptx,
+        file_name="deallens_deck.pptx",
+        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
 
 # ---------------------------------------------------------------- Page 9
