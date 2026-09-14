@@ -4,9 +4,11 @@ import pytest
 
 from tools.financial_calculator import (
     calculate_combined_metric,
+    calculate_deal_economics,
     calculate_growth_rate,
     calculate_margin,
     calculate_precision_flag,
+    calculate_ramp_adjusted_value,
     calculate_revenue_scenario,
     calculate_savings_scenario,
 )
@@ -79,3 +81,35 @@ def test_precision_flag_catches_false_precision():
 def test_precision_flag_allows_rounded_estimate():
     result = calculate_precision_flag(3_500_000, sig_figs_allowed=3)
     assert result["flagged"] is False
+
+
+def test_deal_economics_basic():
+    result = calculate_deal_economics(total_value_creation=237_000_000, deal_value=13_700_000_000)
+    assert result["value_creation_pct_of_deal"] == pytest.approx(1.73, abs=0.01)
+
+
+def test_deal_economics_rejects_nonpositive_deal_value():
+    with pytest.raises(ValueError):
+        calculate_deal_economics(100, 0)
+    with pytest.raises(ValueError):
+        calculate_deal_economics(100, -1)
+
+
+def test_ramp_adjusted_value_basic():
+    result = calculate_ramp_adjusted_value(100_000, year_1_pct=0.4, year_2_pct=0.8, year_3_pct=1.0, cost_to_achieve=50_000)
+    assert result["year_1"] == 40_000
+    assert result["year_2"] == 80_000
+    assert result["year_3"] == 100_000
+    assert result["cumulative_3yr"] == 220_000
+    assert result["net_3yr_value"] == 170_000
+
+
+def test_ramp_adjusted_value_no_ramp_no_cost():
+    result = calculate_ramp_adjusted_value(100_000, 1.0, 1.0, 1.0)
+    assert result["cumulative_3yr"] == 300_000
+    assert result["net_3yr_value"] == 300_000
+
+
+def test_ramp_adjusted_value_rejects_negative_pct():
+    with pytest.raises(ValueError):
+        calculate_ramp_adjusted_value(100_000, -0.1, 0.8, 1.0)

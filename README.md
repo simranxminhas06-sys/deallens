@@ -46,10 +46,14 @@ web search (plus optional transaction assumptions), it produces:
 1. Company profiles (business description, financials, segments)
 2. Strategic rationale for the acquisition
 3. A three-agent independent assessment: Strategy's case, Financial's numbers, Red-Team's challenges to both
-4. Revenue and cost-saving opportunities (from the Financial Agent, with low/base/high scenarios)
-5. Operational and organizational risks
+4. Revenue and cost-saving opportunities (from the Financial Agent, with low/base/high scenarios,
+   a 3-year ramp to full run-rate, and a one-time cost to achieve)
+5. Operational and organizational risks, scored by likelihood x impact
 6. A 100-day integration plan
-7. An executive summary with citations
+7. A sensitivity/tornado analysis and a combined downside/upside scenario
+8. A rule-based Proceed / Proceed with conditions / Further diligence / Do not proceed verdict,
+   comparing identified value creation against the deal's purchase price
+9. An executive summary with citations
 
 ## How the workflow operates
 
@@ -175,6 +179,33 @@ LLM call grading itself. `review_analysis()` rejects or flags:
 It also reports `citation_coverage_pct` and a `claim_type_coverage` breakdown,
 which feed the evaluation metrics below.
 
+## Sensitivity, scenarios, and the verdict
+
+Three more deterministic, no-LLM stages sit on top of the opportunities the Financial Agent produces:
+
+- **[`agent/sensitivity.py`](agent/sensitivity.py)** — `compute_tornado_rows()` swings one
+  assumption at a time to its low/high bound (its own stated range for a synergy percentage, a
+  default ±20% for a cost/revenue base or margin with no stated range), holding everything else
+  fixed, and ranks assumptions by how much each one alone moves total value creation — the
+  standard tornado chart. `compute_scenario_total()` is the combined companion: every assumption
+  at its pessimistic (or optimistic) bound *simultaneously*, for a downside/upside case.
+- **[`agent/verdict.py`](agent/verdict.py)** — a rule-based Proceed / Proceed with conditions /
+  Further diligence required / Do not proceed verdict, built entirely from facts already in the
+  record (the reviewer's high-severity issues, Red-Team's high-severity challenges, citation
+  coverage, and value creation vs. deal value). Every reason cited traces to a specific
+  `ReviewIssue` or `Challenge` — this is deliberately not another LLM call rendering an opinion,
+  so it costs nothing and works in Demo mode.
+- **`calculate_deal_economics()` and `calculate_ramp_adjusted_value()`** in
+  [`tools/financial_calculator.py`](tools/financial_calculator.py) — the former compares total
+  value creation against the deal's purchase price (captured on Create Analysis but otherwise
+  unused elsewhere in the pipeline); the latter phases an opportunity's value in over three years
+  and nets out a one-time cost to achieve it, instead of presenting a single undiscounted
+  run-rate number.
+
+All three are recomputed live wherever they're shown (the Sensitivity and Recommendation pages,
+and the sidebar's "Live deal scorecard") rather than cached on the record, so dragging a scenario
+assumption slider on Independent Assessments updates them immediately.
+
 ## How it was tested
 
 - `tests/test_financial_calculator.py` — unit tests for every calculation
@@ -185,12 +216,25 @@ which feed the evaluation metrics below.
   duplicate opportunities, false precision, citation-coverage percentage, and
   document-grounding. No API key required.
 - `tests/test_demo_mode.py` — runs the full fixture-based pipeline
-  (`agent/demo_fixtures.py`) end to end and asserts: all three war-room agents
-  are present, Red-Team actually challenges the Financial Agent, the real
+  (`agent/demo_fixtures.py`) end to end and asserts: all three independent
+  agents are present, Red-Team actually challenges the Financial Agent, the real
   reviewer flags the deliberately under-evidenced opportunity, the
   cost-synergy calculation is *not* flagged, and two runs are byte-identical
   (no hidden randomness). No API key required — this is the fastest way to
   sanity-check the whole system after a change.
+- `tests/test_sensitivity.py` — the tornado ranking (stated bounds for a
+  `_base` percentage, default ±20% swing otherwise, sorted by swing size) and
+  the combined downside/upside scenario total. No API key required.
+- `tests/test_verdict.py` — every branch of the rule-based verdict (clean →
+  proceed; a high-severity Red-Team challenge alone → proceed with
+  conditions; a high-severity reviewer issue → further diligence; low
+  citation coverage → further diligence; compounding issues → do not
+  proceed), plus the deal-economics reason line. No API key required.
+- `tests/test_database.py` — repeated `save_analysis()` calls on the same
+  record update one row instead of inserting a new one each time (this was a
+  real bug: every scenario-slider drag saves, so without this a session of
+  normal use would flood "Saved analyses" with duplicates), and a reloaded
+  record's id survives so the next save still updates in place.
 
 Run them with:
 
@@ -249,8 +293,11 @@ keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
 (the debate transcript, with live sliders on each opportunity to drag its
 underlying assumptions and watch the estimate recompute), **4. 100-Day Plan**
 (risk register, plan, reviewer findings, executive summary, and a downloadable
-report), and **5. Sensitivity** (a tornado chart ranking which assumption
-moves total value creation the most) — everything is already populated.
+report), **5. Sensitivity** (a tornado chart plus a downside/upside scenario),
+and **6. Recommendation** (the rule-based verdict) — everything is already
+populated, and the sidebar's "Live deal scorecard" tracks total value
+creation against the original case and the deal's purchase price as you
+adjust any slider.
 
 For a **live run** against real OpenAI calls: switch the sidebar to "Live
 (OpenAI)", set `OPENAI_API_KEY` in your environment first —
@@ -261,11 +308,12 @@ export $(cat .env | xargs)
 streamlit run app.py
 ```
 
-— then work through the same four pages: **1. Create Analysis** (keep the
+— then work through the same pages: **1. Create Analysis** (keep the
 bundled sample documents checked, or upload your own) → **2. Evidence**
 (review extracted facts, approve assumptions) → **3. Independent Assessments**
 (run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
-plan, reviewer, executive summary, and download the report).
+plan, reviewer, executive summary, and download the report) → **5. Sensitivity**
+and **6. Recommendation** (both live, no extra step needed once opportunities exist).
 
 Run tests any time (no API key needed) with `pytest`.
 
@@ -274,13 +322,14 @@ Run tests any time (no API key needed) with `pytest`.
 Staged so each piece is working before the next is added:
 
 1. ✅ Strategy, Financial, and Red-Team agents debating in Independent Assessments, with a no-API-key demo mode (this version).
-2. ✅ **Interactive scenario assumptions** — every opportunity's underlying assumptions (cost/revenue base, reduction/uplift %, margin) are live sliders on Independent Assessments, recomputed instantly via the real `financial_calculator` functions (`agent/sensitivity.py`, no LLM call).
-3. ✅ **Sensitivity / tornado chart** — the Sensitivity page ranks every assumption by how much swinging it alone (others held fixed) moves total value creation, the standard deal-team sensitivity view (this version).
-4. **Investment Committee Agent** — reviews the three assessments, explains where they disagree, and issues a Proceed / Proceed with conditions / Further diligence / Do not proceed verdict.
-5. **Synergy ramp/phasing** — phase opportunity value in over multiple years instead of a single static annual run-rate, and separate one-time cost-to-achieve from the run-rate benefit.
-6. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
-7. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-8. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+2. ✅ **Interactive scenario assumptions** — every opportunity's underlying assumptions (cost/revenue base, reduction/uplift %, margin) are live sliders on Independent Assessments, recomputed instantly via the real `financial_calculator` functions, no LLM call.
+3. ✅ **Sensitivity / tornado chart, and a downside/upside scenario** — the Sensitivity page ranks every assumption by how much swinging it alone (others held fixed) moves total value creation, plus a combined worst/best case with every assumption swung at once (`agent/sensitivity.py`, this version).
+4. ✅ **Investment Committee verdict** — a rule-based Proceed / Proceed with conditions / Further diligence / Do not proceed verdict on its own Recommendation page, built entirely from the reviewer's findings and Red-Team's challenges (`agent/verdict.py`, this version — deliberately not an LLM call rendering an opinion, so it's free and works in Demo mode).
+5. ✅ **Deal economics and synergy ramp/cost-to-achieve** — value creation is compared against the deal's purchase price (captured on Create Analysis but previously unused anywhere in the pipeline), and each opportunity phases in over a 3-year ramp net of a one-time cost to achieve, instead of a single undiscounted run-rate number (this version).
+6. ✅ **Risk likelihood x impact scoring** — the risk register is a composite 1-9 score (likelihood x impact), sorted highest first, instead of a single severity label (this version).
+7. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
+8. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+9. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

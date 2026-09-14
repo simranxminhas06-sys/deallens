@@ -16,7 +16,9 @@ Ground every risk and every action in the company profiles, strategic rationale,
 opportunities you are given — do not introduce new financial claims. Each integration action
 must have a single accountable owner_role, fall into exactly one 100-day phase, and where it
 implements an opportunity, name it in linked_opportunity. Flag risks even where mitigation is
-uncertain; do not omit a known risk because the mitigation is unclear."""
+uncertain; do not omit a known risk because the mitigation is unclear. For every risk, set both
+severity (impact if it materializes) and likelihood (how likely it is to occur) — these are
+often different: a low-likelihood risk can still be high-severity, and vice versa."""
 
 
 class _RiskBatch(BaseModel):

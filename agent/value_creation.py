@@ -20,7 +20,14 @@ prose. Use search_uploaded_documents to find the cost bases, revenue bases, or o
 that justify an opportunity before calculating its value. Every opportunity must cite the
 document evidence it is based on and list the assumptions fed into its calculation explicitly.
 Do not propose more than 6 opportunities per category. Do not duplicate opportunities that
-describe the same underlying lever."""
+describe the same underlying lever.
+
+For every opportunity, also estimate: cost_to_achieve (a realistic one-time cost to capture
+it — integration, systems, severance, etc.; 0 only if genuinely negligible), and year_1_pct /
+year_2_pct / year_3_pct (the fraction of full run-rate value realized in each of the first
+three years — most synergies ramp in rather than starting at 100%; year_3_pct is usually 1.0).
+Base the ramp speed on implementation_difficulty and time_horizon: a low-difficulty, short-
+horizon opportunity ramps faster than a high-difficulty, long-horizon one."""
 
 TOOL_SCHEMAS = FUNCTION_SCHEMAS + [SEARCH_TOOL_SCHEMA]
 TOOL_FUNCS = {**TOOL_FUNCTIONS, "search_uploaded_documents": search_uploaded_documents}

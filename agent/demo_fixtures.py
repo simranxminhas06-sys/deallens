@@ -166,6 +166,10 @@ def _cost_opportunity() -> tuple[ValueOpportunity, dict]:
         key_risks=["Perishables service-level disruption during consolidation", "Union or labor-relations friction at affected distribution sites"],
         calculation_method="calculate_savings_scenario",
         calculation_inputs=calc_inputs,
+        cost_to_achieve=60_000_000,
+        year_1_pct=0.40,
+        year_2_pct=0.85,
+        year_3_pct=1.0,
     )
     tool_call = {"name": "calculate_savings_scenario", "arguments": calc_inputs, "result": calc}
     return opp, tool_call
@@ -200,6 +204,10 @@ def _revenue_opportunity() -> tuple[ValueOpportunity, dict]:
         key_risks=["Cannibalizes existing Whole Foods in-store sales", "No pilot data to validate the assumed uplift rate"],
         calculation_method="calculate_revenue_scenario",
         calculation_inputs=calc_inputs,
+        cost_to_achieve=2_000_000,
+        year_1_pct=0.30,
+        year_2_pct=0.70,
+        year_3_pct=1.0,
     )
     tool_call = {"name": "calculate_revenue_scenario", "arguments": calc_inputs, "result": calc}
     return opp, tool_call
@@ -288,6 +296,7 @@ def _risks() -> list[Risk]:
             description="Whole Foods' decentralized, team-based store operating model differs materially from Amazon's centralized, metrics-driven culture.",
             category="cultural",
             severity=RiskSeverity.HIGH,
+            likelihood=RiskSeverity.HIGH,
             mitigation="Retain Whole Foods store-level leadership through year one; phase in centralized systems rather than a single cutover.",
             evidence=[
                 EvidenceItem(
@@ -302,6 +311,7 @@ def _risks() -> list[Risk]:
             description="Aggressive price cuts or delivery promotions risk eroding Whole Foods' premium brand positioning.",
             category="customer",
             severity=RiskSeverity.MEDIUM,
+            likelihood=RiskSeverity.MEDIUM,
             mitigation="Pilot pricing/promotion changes in a limited set of stores before a full rollout.",
         ),
     ]

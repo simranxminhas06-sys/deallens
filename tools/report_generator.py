@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+from agent.verdict import compute_verdict
 from schemas.analysis_models import AnalysisRecord, EvidenceItem
+from tools.financial_calculator import calculate_deal_economics, calculate_ramp_adjusted_value
+
+VERDICT_LABEL = {
+    "proceed": "Proceed",
+    "proceed_with_conditions": "Proceed with conditions",
+    "further_diligence": "Further diligence required",
+    "do_not_proceed": "Do not proceed",
+}
 
 
 def _fmt_evidence(evidence: list[EvidenceItem]) -> str:
@@ -24,6 +33,27 @@ def generate_report(record: AnalysisRecord) -> str:
     lines.append("## Executive Summary\n")
     lines.append(record.executive_summary or "_Not yet generated._")
     lines.append("")
+
+    total_value_creation = sum(o.estimated_value.base for o in record.opportunities)
+    if record.review is not None:
+        verdict = compute_verdict(record.review, record.agent_assessments, total_value_creation, t)
+        lines.append("## Recommendation\n")
+        lines.append(f"**{VERDICT_LABEL[verdict.level.value]}**\n")
+        for reason in verdict.reasons:
+            lines.append(f"- {reason}")
+        if verdict.conditions:
+            lines.append("\nConditions to resolve before proceeding:\n")
+            for condition in verdict.conditions:
+                lines.append(f"- {condition}")
+        lines.append("")
+
+    if t.deal_value and record.opportunities:
+        econ = calculate_deal_economics(total_value_creation, t.deal_value)
+        lines.append("## Deal Economics\n")
+        lines.append(
+            f"Identified value creation of ${total_value_creation:,.0f} against a "
+            f"${t.deal_value:,.0f} deal value — {econ['value_creation_pct_of_deal']:.2f}% of the purchase price.\n"
+        )
 
     lines.append("## Company Profiles\n")
     for label, profile in (("Acquirer", record.acquirer_profile), ("Target", record.target_profile)):
@@ -82,16 +112,23 @@ def generate_report(record: AnalysisRecord) -> str:
                 lines.append("\nAssumptions: " + "; ".join(o.assumptions))
             if o.key_risks:
                 lines.append("\nKey risks: " + "; ".join(o.key_risks))
+            ramp = calculate_ramp_adjusted_value(o.estimated_value.base, o.year_1_pct, o.year_2_pct, o.year_3_pct, o.cost_to_achieve)
+            lines.append(
+                f"\n3-year ramp: Year 1 ${ramp['year_1']:,.0f}, Year 2 ${ramp['year_2']:,.0f}, "
+                f"Year 3 ${ramp['year_3']:,.0f}. Cost to achieve: ${o.cost_to_achieve:,.0f}. "
+                f"Net 3-year value: ${ramp['net_3yr_value']:,.0f}."
+            )
             if o.evidence:
                 lines.append("\nEvidence:\n" + _fmt_evidence(o.evidence))
             lines.append("")
 
     if record.risks:
         lines.append("## Risk Register\n")
-        lines.append("| Risk | Category | Severity | Mitigation |")
-        lines.append("|---|---|---|---|")
-        for r in record.risks:
-            lines.append(f"| {r.title} | {r.category} | {r.severity.value} | {r.mitigation} |")
+        lines.append("Sorted by risk score (likelihood x impact, 1-9), highest first.\n")
+        lines.append("| Risk | Category | Likelihood | Impact | Score | Mitigation |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in sorted(record.risks, key=lambda r: r.score, reverse=True):
+            lines.append(f"| {r.title} | {r.category} | {r.likelihood.value} | {r.severity.value} | {r.score} | {r.mitigation} |")
         lines.append("")
 
     if record.integration_plan:

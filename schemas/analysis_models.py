@@ -102,15 +102,32 @@ class ValueOpportunity(BaseModel):
         default_factory=dict,
         description="Exact keyword arguments passed to calculation_method, so the estimate can be recomputed live from adjusted assumptions",
     )
+    cost_to_achieve: float = Field(
+        default=0.0, description="One-time cost to capture this opportunity (integration, systems, severance, etc.)"
+    )
+    year_1_pct: float = Field(default=1.0, description="Fraction of full run-rate value realized in year 1")
+    year_2_pct: float = Field(default=1.0, description="Fraction of full run-rate value realized in year 2")
+    year_3_pct: float = Field(default=1.0, description="Fraction of full run-rate value realized in year 3 (usually 1.0 = full run-rate)")
+
+
+_SEVERITY_WEIGHT = {RiskSeverity.LOW: 1, RiskSeverity.MEDIUM: 2, RiskSeverity.HIGH: 3}
 
 
 class Risk(BaseModel):
     title: str
     description: str
     category: str = Field(description="e.g. operational, cultural, regulatory, financial, customer")
-    severity: RiskSeverity
+    severity: RiskSeverity = Field(description="Impact if the risk materializes")
+    likelihood: RiskSeverity = Field(default=RiskSeverity.MEDIUM, description="How likely the risk is to occur")
     mitigation: str
     evidence: list[EvidenceItem] = Field(default_factory=list)
+
+    @property
+    def score(self) -> int:
+        """Likelihood x impact, 1-9. A composite risk register is sorted by this, not by a
+        single severity label, since a low-likelihood risk can still be high-impact and vice versa.
+        """
+        return _SEVERITY_WEIGHT[self.likelihood] * _SEVERITY_WEIGHT[self.severity]
 
 
 class IntegrationAction(BaseModel):
@@ -152,6 +169,21 @@ class ReviewResult(BaseModel):
     issues: list[ReviewIssue] = Field(default_factory=list)
     claim_type_coverage: dict[str, int] = Field(default_factory=dict)
     citation_coverage_pct: Optional[float] = None
+
+
+class VerdictLevel(str, Enum):
+    PROCEED = "proceed"
+    PROCEED_WITH_CONDITIONS = "proceed_with_conditions"
+    FURTHER_DILIGENCE = "further_diligence"
+    DO_NOT_PROCEED = "do_not_proceed"
+
+
+class Verdict(BaseModel):
+    level: VerdictLevel
+    reasons: list[str] = Field(default_factory=list, description="Deterministic facts that drove the verdict")
+    conditions: list[str] = Field(
+        default_factory=list, description="Specific items to resolve before proceeding, if level is proceed_with_conditions"
+    )
 
 
 class Challenge(BaseModel):

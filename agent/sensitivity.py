@@ -78,3 +78,33 @@ def compute_tornado_rows(opportunities: list[ValueOpportunity]) -> list[dict]:
             )
     rows.sort(key=lambda r: r["swing"], reverse=True)
     return rows
+
+
+def compute_scenario_total(opportunities: list[ValueOpportunity], direction: str) -> float:
+    """Total value creation if every swingable assumption, across every opportunity, moves to
+    its low ("downside") or high ("upside") bound simultaneously — the combined-stress-test
+    companion to the tornado chart's one-assumption-at-a-time view. Every calculation in this
+    codebase is monotonic in each of its inputs (all multiplicative, no offsetting terms), so
+    the low bound of every parameter is consistently the pessimistic case and the high bound
+    consistently the optimistic one.
+    """
+    if direction not in ("low", "high"):
+        raise ValueError("direction must be 'low' or 'high'")
+    total = 0.0
+    for o in opportunities:
+        fn = TOOL_FUNCTIONS.get(o.calculation_method)
+        if not fn or not o.calculation_inputs:
+            total += o.estimated_value.base
+            continue
+        swung_inputs = dict(o.calculation_inputs)
+        for param in o.calculation_inputs:
+            bounds = _param_bounds(param, o.calculation_inputs)
+            if bounds is None:
+                continue
+            swung_inputs[param] = bounds[0] if direction == "low" else bounds[1]
+        try:
+            result = fn(**swung_inputs)
+            total += result["base"]
+        except ValueError:
+            total += o.estimated_value.base
+    return round(total, 2)

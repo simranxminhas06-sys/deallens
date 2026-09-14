@@ -96,6 +96,51 @@ def calculate_combined_metric(acquirer_value: float, target_value: float, adjust
     }
 
 
+def calculate_deal_economics(total_value_creation: float, deal_value: float) -> dict:
+    """How the identified value creation compares to what was actually paid for the deal —
+    not exposed to the LLM as a tool; used directly by the app to answer the question the
+    rest of the pipeline never does: was this deal worth the price paid for it.
+    """
+    if deal_value <= 0:
+        raise ValueError("deal_value must be positive")
+    ratio = total_value_creation / deal_value
+    return {
+        "value_creation_pct_of_deal": round(ratio * 100, 2),
+        "total_value_creation": round(total_value_creation, 2),
+        "deal_value": deal_value,
+        "method": "value_creation_pct_of_deal = total_value_creation / deal_value",
+    }
+
+
+def calculate_ramp_adjusted_value(
+    base_value: float,
+    year_1_pct: float,
+    year_2_pct: float,
+    year_3_pct: float,
+    cost_to_achieve: float = 0.0,
+) -> dict:
+    """3-year cumulative value from a full-run-rate base value ramping in over three years,
+    net of a one-time cost to capture it. Not exposed to the LLM as a tool.
+    """
+    for name, pct in (("year_1_pct", year_1_pct), ("year_2_pct", year_2_pct), ("year_3_pct", year_3_pct)):
+        if pct < 0:
+            raise ValueError(f"{name} must be non-negative")
+    year_1 = round(base_value * year_1_pct, 2)
+    year_2 = round(base_value * year_2_pct, 2)
+    year_3 = round(base_value * year_3_pct, 2)
+    cumulative = round(year_1 + year_2 + year_3, 2)
+    net_of_cost = round(cumulative - cost_to_achieve, 2)
+    return {
+        "year_1": year_1,
+        "year_2": year_2,
+        "year_3": year_3,
+        "cumulative_3yr": cumulative,
+        "cost_to_achieve": cost_to_achieve,
+        "net_3yr_value": net_of_cost,
+        "method": "cumulative_3yr = base*(y1_pct+y2_pct+y3_pct); net_3yr_value = cumulative_3yr - cost_to_achieve",
+    }
+
+
 def calculate_precision_flag(value: float, sig_figs_allowed: int = 3) -> dict:
     """Flags whether a dollar estimate is stated with implausible false precision."""
     if value == 0:

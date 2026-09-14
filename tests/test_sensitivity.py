@@ -1,6 +1,6 @@
 import pytest
 
-from agent.sensitivity import compute_tornado_rows
+from agent.sensitivity import compute_scenario_total, compute_tornado_rows
 from schemas.analysis_models import Category, Difficulty, EstimatedValue, ValueOpportunity
 
 
@@ -96,3 +96,30 @@ def test_opportunity_without_calculation_inputs_is_skipped():
     o = _cost_opportunity()
     o.calculation_inputs = {}
     assert compute_tornado_rows([o]) == []
+
+
+def test_scenario_total_downside_is_below_base_and_upside_above():
+    opportunities = [_cost_opportunity(), _revenue_opportunity()]
+    total_base = sum(o.estimated_value.base for o in opportunities)
+    downside = compute_scenario_total(opportunities, "low")
+    upside = compute_scenario_total(opportunities, "high")
+    assert downside < total_base < upside
+
+
+def test_scenario_total_downside_matches_every_param_at_its_low_bound():
+    # cost opp: baseline_cost -20%, reduction_pct_base -> its own stated low (0.10)
+    # revenue opp: baseline_revenue -20%, uplift_pct_base -> 0.01, incremental_margin_pct -20% (clamped >=0)
+    opportunities = [_cost_opportunity(), _revenue_opportunity()]
+    downside = compute_scenario_total(opportunities, "low")
+    expected_cost = (1_500_000_000 * 0.8) * 0.10
+    expected_revenue = (800_000_000 * 0.8) * 0.01 * 0.8
+    assert downside == pytest.approx(expected_cost + expected_revenue)
+
+
+def test_scenario_total_rejects_bad_direction():
+    with pytest.raises(ValueError):
+        compute_scenario_total([_cost_opportunity()], "sideways")
+
+
+def test_scenario_total_empty_opportunities_is_zero():
+    assert compute_scenario_total([], "low") == 0.0

@@ -29,17 +29,18 @@ def get_connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 
 def save_analysis(record: AnalysisRecord, db_path: Path = DB_PATH) -> int:
+    """Inserts on first save, updates in place after that. Mutates record.id so the caller's
+    in-memory record (and every subsequent save_analysis call on it) targets the same row —
+    without this, every save after the first would insert a new row instead of updating.
+    """
     conn = get_connection(db_path)
-    payload = record.model_dump_json()
     if record.id is None:
         cur = conn.execute(
             "INSERT INTO analyses (acquirer_name, target_name, created_at, data) VALUES (?, ?, ?, ?)",
-            (record.transaction.acquirer_name, record.transaction.target_name, record.created_at.isoformat(), payload),
+            (record.transaction.acquirer_name, record.transaction.target_name, record.created_at.isoformat(), "{}"),
         )
-        conn.commit()
-        new_id = cur.lastrowid
-        conn.close()
-        return new_id
+        record.id = cur.lastrowid
+    payload = record.model_dump_json()
     conn.execute(
         "UPDATE analyses SET acquirer_name=?, target_name=?, data=? WHERE id=?",
         (record.transaction.acquirer_name, record.transaction.target_name, payload, record.id),
@@ -55,7 +56,9 @@ def load_analysis(analysis_id: int, db_path: Path = DB_PATH) -> AnalysisRecord |
     conn.close()
     if row is None:
         return None
-    return AnalysisRecord.model_validate(json.loads(row[0]))
+    record = AnalysisRecord.model_validate(json.loads(row[0]))
+    record.id = analysis_id  # authoritative regardless of what the stored JSON says
+    return record
 
 
 def list_analyses(db_path: Path = DB_PATH) -> list[dict]:

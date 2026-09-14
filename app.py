@@ -19,10 +19,12 @@ import streamlit as st
 from agent import orchestrator
 from agent.demo_fixtures import DOCUMENT_NAMES as DEMO_DOCUMENT_NAMES
 from agent.demo_fixtures import run_demo_pipeline
-from agent.sensitivity import compute_tornado_rows
+from agent.reviewer import review_analysis
+from agent.sensitivity import compute_scenario_total, compute_tornado_rows
+from agent.verdict import compute_verdict
 from db.database import list_analyses, load_analysis, save_analysis
-from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions
-from tools.financial_calculator import TOOL_FUNCTIONS
+from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions, VerdictLevel
+from tools.financial_calculator import TOOL_FUNCTIONS, calculate_deal_economics, calculate_ramp_adjusted_value
 from tools.report_generator import generate_report
 
 st.set_page_config(page_title="DealLens", layout="wide")
@@ -44,7 +46,7 @@ if not is_demo and not os.environ.get("OPENAI_API_KEY"):
 
 page = st.sidebar.radio(
     "Workflow",
-    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan", "5. Sensitivity"],
+    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan", "5. Sensitivity", "6. Recommendation"],
 )
 
 with st.sidebar.expander("Saved analyses"):
@@ -175,6 +177,19 @@ def _render_tornado_chart(rows: list[dict], total_base: float, max_rows: int = 8
 
 
 ROLE_LABEL = {AgentRole.STRATEGY: "Strategy Agent", AgentRole.FINANCIAL: "Financial Agent", AgentRole.RED_TEAM: "Red-Team Agent"}
+VERDICT_LABEL = {
+    VerdictLevel.PROCEED: "Proceed",
+    VerdictLevel.PROCEED_WITH_CONDITIONS: "Proceed with conditions",
+    VerdictLevel.FURTHER_DILIGENCE: "Further diligence required",
+    VerdictLevel.DO_NOT_PROCEED: "Do not proceed",
+}
+# st.success/warning/error render with Streamlit's own status styling, no emoji needed
+VERDICT_ALERT_FN = {
+    VerdictLevel.PROCEED: st.success,
+    VerdictLevel.PROCEED_WITH_CONDITIONS: st.warning,
+    VerdictLevel.FURTHER_DILIGENCE: st.warning,
+    VerdictLevel.DO_NOT_PROCEED: st.error,
+}
 
 # ---------------------------------------------------------------- Page 1
 if page == "1. Create Analysis":
@@ -340,6 +355,16 @@ elif page == "3. Independent Assessments":
                         with st.container(border=True):
                             st.markdown(f"**{_md(o.title)}** — base \\${o.estimated_value.base:,.0f} ({_md(o.estimated_value.as_range_string())})")
                             st.caption(_md(f"Assumptions: {'; '.join(o.assumptions)}"))
+                            ramp = calculate_ramp_adjusted_value(
+                                o.estimated_value.base, o.year_1_pct, o.year_2_pct, o.year_3_pct, o.cost_to_achieve
+                            )
+                            st.caption(
+                                _md(
+                                    f"3-year ramp: Y1 ${ramp['year_1']:,.0f} → Y2 ${ramp['year_2']:,.0f} → "
+                                    f"Y3 ${ramp['year_3']:,.0f}  |  Cost to achieve: ${o.cost_to_achieve:,.0f}  |  "
+                                    f"Net 3-yr value: ${ramp['net_3yr_value']:,.0f}"
+                                )
+                            )
                             _render_scenario_controls(o, key_prefix=f"scn_{assessment.role.value}_{i}")
             if assessment.challenges:
                 for c in assessment.challenges:
@@ -378,10 +403,19 @@ elif page == "4. 100-Day Plan":
 
     if record.risks:
         st.subheader("Risk Register")
+        st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
+        ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
         st.table(
             [
-                {"Risk": r.title, "Category": r.category, "Severity": r.severity.value, "Mitigation": r.mitigation}
-                for r in record.risks
+                {
+                    "Risk": r.title,
+                    "Category": r.category,
+                    "Likelihood": r.likelihood.value,
+                    "Impact": r.severity.value,
+                    "Score": r.score,
+                    "Mitigation": r.mitigation,
+                }
+                for r in ranked_risks
             ]
         )
 
@@ -428,7 +462,26 @@ elif page == "5. Sensitivity":
         st.stop()
 
     total_base = sum(o.estimated_value.base for o in record.opportunities)
-    st.metric("Total value creation (base case)", f"${total_base:,.0f}")
+    downside = compute_scenario_total(record.opportunities, "low")
+    upside = compute_scenario_total(record.opportunities, "high")
+    cols = st.columns(3)
+    cols[0].metric("Downside case", f"${downside:,.0f}", help="Every assumption at its pessimistic bound, simultaneously.")
+    cols[1].metric("Base case", f"${total_base:,.0f}")
+    cols[2].metric("Upside case", f"${upside:,.0f}", help="Every assumption at its optimistic bound, simultaneously.")
+    st.caption(
+        "The tornado chart below isolates one assumption at a time. Downside/upside stress-test "
+        "every assumption at once — the combined worst and best case."
+    )
+
+    if record.transaction.deal_value:
+        econ = calculate_deal_economics(total_base, record.transaction.deal_value)
+        st.metric(
+            "Value creation vs. deal value",
+            f"{econ['value_creation_pct_of_deal']:.2f}%",
+            help=f"${total_base:,.0f} identified value creation against a ${record.transaction.deal_value:,.0f} purchase price.",
+        )
+    else:
+        st.caption("Set a deal value on Create Analysis to compare value creation against the purchase price.")
 
     rows = compute_tornado_rows(record.opportunities)
     if not rows:
@@ -450,11 +503,73 @@ elif page == "5. Sensitivity":
             "live record, so it updates too."
         )
 
-# ---------------------------------------------------------------- Sidebar: live totals
+# ---------------------------------------------------------------- Page 6
+elif page == "6. Recommendation":
+    _require_record()
+    record = st.session_state.record
+    st.header("Recommendation")
+    st.caption(
+        "A rule-based verdict, not a model's opinion — every reason below traces to a specific "
+        "reviewer finding or Red-Team challenge already in this analysis. Recomputed live from "
+        "the current record, so it reflects any assumption you've adjusted on Independent "
+        "Assessments even if you haven't re-run the reviewer on 100-Day Plan."
+    )
+
+    if not record.agent_assessments:
+        st.warning("Run Independent Assessments first — the verdict needs the agents' positions and challenges.")
+        st.stop()
+
+    fresh_review = review_analysis(record, st.session_state.tool_call_log, st.session_state.document_names)
+    total_value = sum(o.estimated_value.base for o in record.opportunities)
+    verdict = compute_verdict(fresh_review, record.agent_assessments, total_value, record.transaction)
+
+    VERDICT_ALERT_FN[verdict.level](VERDICT_LABEL[verdict.level])
+
+    st.subheader("Why")
+    for reason in verdict.reasons:
+        st.markdown(f"- {_md(reason)}")
+
+    if verdict.conditions:
+        st.subheader("Conditions to resolve before proceeding")
+        for condition in verdict.conditions:
+            st.markdown(f"- {_md(condition)}")
+
+    with st.expander("Reviewer detail behind this verdict"):
+        st.write("Status: " + ("PASSED" if fresh_review.passed else "ISSUES FOUND"))
+        if fresh_review.citation_coverage_pct is not None:
+            st.metric("Citation coverage", f"{fresh_review.citation_coverage_pct:.1f}%")
+        for issue in fresh_review.issues:
+            st.markdown(f"- **[{issue.severity.value}] {issue.stage} / {_md(issue.item_title)}** — {_md(issue.problem)}")
+
+    st.caption(
+        "Rules: 2+ high-severity reviewer issues combined with a high-severity Red-Team "
+        "challenge → do not proceed. Any unresolved high-severity reviewer issue, or citation "
+        "coverage under 70%, → further diligence. A clean review with a high-severity Red-Team "
+        "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
+    )
+
+# ---------------------------------------------------------------- Sidebar: live deal scorecard
 # Placed at the end of the script (not with the rest of the sidebar near the top) so it
 # reflects any scenario-assumption edit made by the page body above, in this same run —
 # Streamlit lets you append to st.sidebar from anywhere in the script.
 if st.session_state.record and st.session_state.record.opportunities:
-    total_value = sum(o.estimated_value.base for o in st.session_state.record.opportunities)
+    _record = st.session_state.record
+    _current_total = sum(o.estimated_value.base for o in _record.opportunities)
+
+    _original_totals = st.session_state.setdefault("original_totals_by_id", {})
+    if _record.id not in _original_totals:
+        _original_totals[_record.id] = _current_total
+    _original_total = _original_totals[_record.id]
+
     st.sidebar.divider()
-    st.sidebar.metric("Total value creation (base case)", f"${total_value:,.0f}")
+    st.sidebar.caption("Live deal scorecard")
+    _delta = _current_total - _original_total
+    _delta_str = None
+    if abs(_delta) > 0.01:
+        _delta_pct = (_delta / _original_total * 100) if _original_total else 0.0
+        _delta_str = f"{_delta:+,.0f} ({_delta_pct:+.1f}%) vs. original"
+    st.sidebar.metric("Total value creation (base case)", f"${_current_total:,.0f}", delta=_delta_str)
+
+    if _record.transaction.deal_value:
+        _econ = calculate_deal_economics(_current_total, _record.transaction.deal_value)
+        st.sidebar.metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
