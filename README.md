@@ -305,13 +305,17 @@ adjust any slider:
 
 - **2. Evidence** — company profiles and strategic rationale
 - **3. Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute
-- **4. 100-Day Plan** — the phased integration plan, guiding principles, and governance (click "Generate risk register, integration plan, and review" first; that one action populates this page plus Risk Register and Executive Summary)
-- **5. Risk Register** — sorted by likelihood × impact score
-- **6. Sensitivity** — a tornado chart plus a downside/upside scenario
-- **7. Recommendation** — the rule-based verdict
+- **4. Sensitivity** — a tornado chart plus a downside/upside scenario, stress-testing the base case before you commit to it
+- **5. Risk Register** — sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
+- **6. Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture
+- **7. 100-Day Plan** — the phased integration plan, guiding principles, and governance — the execution plan for a deal you've decided to proceed with
 - **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report
 - **9. Evidence Trail** — every claim traced to its citation
 - **10. Tables** — every structured table in the analysis (company profiles, financial baseline, opportunities, integration actions, reviewer issues) in one place
+
+The order follows how a deal team actually works: independent analysis, then
+stress-test it, then assess risk, then decide, then plan execution, then
+package the deliverable — not the order features were built in.
 
 For a **live run** against real OpenAI calls: switch the sidebar to "Live
 (OpenAI)", set `OPENAI_API_KEY` in your environment first —
@@ -325,9 +329,10 @@ streamlit run app.py
 — then work through the same pages: **1. Create Analysis** (keep the
 bundled sample documents checked, or upload your own) → **2. Evidence**
 (review extracted facts, approve assumptions) → **3. Independent Assessments**
-(run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk
-register, plan, reviewer, and executive summary generation) → **5–10** (all
-live, no extra step needed once opportunities exist).
+(run Strategy → Financial → Red-Team) → **4. Sensitivity** → **5. Risk
+Register** (run risk register, plan, reviewer, and executive summary
+generation here) → **6–10** (all live, no extra step needed once
+opportunities exist).
 
 Run tests any time (no API key needed) with `pytest`.
 

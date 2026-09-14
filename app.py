@@ -90,8 +90,8 @@ if not is_demo and not os.environ.get("OPENAI_API_KEY"):
 page = st.sidebar.radio(
     "Workflow",
     [
-        "1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan",
-        "5. Risk Register", "6. Sensitivity", "7. Recommendation", "8. Executive Summary",
+        "1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. Sensitivity",
+        "5. Risk Register", "6. Recommendation", "7. 100-Day Plan", "8. Executive Summary",
         "9. Evidence Trail", "10. Tables",
     ],
 )
@@ -303,7 +303,7 @@ if page == "1. Create Analysis":
             st.session_state.document_names = DEMO_DOCUMENT_NAMES
             st.session_state.vector_store_id = None
             save_analysis(record)
-            st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or 100-Day Plan.")
+            st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or Sensitivity.")
     else:
         col1, col2 = st.columns(2)
         acquirer_name = col1.text_input("Acquiring company", value="Amazon.com, Inc.")
@@ -472,81 +472,7 @@ elif page == "3. Independent Assessments":
                 st.code(f"{call['name']}({call['arguments']}) -> {call['result']}")
 
 # ---------------------------------------------------------------- Page 4
-elif page == "4. 100-Day Plan":
-    _require_record()
-    record = st.session_state.record
-    st.header("100-Day Integration Plan")
-
-    if not record.opportunities:
-        st.warning("Run Independent Assessments first to generate opportunities.")
-        st.stop()
-
-    if not record.integration_plan and st.session_state.vector_store_id:
-        if st.button("Generate risk register, integration plan, and review", type="primary"):
-            with st.spinner("Planning integration and identifying risks..."):
-                record = orchestrator.run_integration_stage(record, st.session_state.vector_store_id)
-            with st.spinner("Running reviewer checks..."):
-                record = orchestrator.run_review_stage(
-                    record, st.session_state.tool_call_log, st.session_state.document_names
-                )
-            with st.spinner("Writing executive summary..."):
-                record = orchestrator.generate_executive_summary(record, st.session_state.vector_store_id)
-            st.session_state.record = record
-            save_analysis(record)
-
-    if record.integration_plan:
-        st.subheader("Plan")
-        for phase in ("0-30 days", "31-60 days", "61-100 days"):
-            actions = [a for a in record.integration_plan.actions if a.phase == phase]
-            if not actions:
-                continue
-            st.markdown(f"**{phase}**")
-            for a in actions:
-                st.markdown(f"- **{_md(a.title)}** ({a.owner_role}) — {_md(a.description)}")
-        if record.integration_plan.guiding_principles:
-            st.markdown("**Guiding principles**")
-            for principle in record.integration_plan.guiding_principles:
-                st.markdown(f"- {_md(principle)}")
-        st.caption(f"Governance: {_md(record.integration_plan.governance)}")
-
-    st.caption(
-        "Risk Register, Executive Summary, and the full report download each moved to their "
-        "own page — see the sidebar."
-    )
-
-# ---------------------------------------------------------------- Page 5
-elif page == "5. Risk Register":
-    _require_record()
-    record = st.session_state.record
-    st.header("Risk Register")
-
-    if not record.risks:
-        st.warning("Run the 100-Day Plan generation step first to identify risks.")
-        st.stop()
-
-    st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
-    ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
-    st.table(
-        [
-            {
-                "Risk": r.title,
-                "Category": r.category,
-                "Likelihood": r.likelihood.value,
-                "Impact": r.severity.value,
-                "Score": r.score,
-                "Mitigation": r.mitigation,
-            }
-            for r in ranked_risks
-        ]
-    )
-
-    for r in ranked_risks:
-        if r.evidence:
-            with st.expander(f"Evidence: {r.title}"):
-                _evidence_lines(r.evidence)
-
-# ---------------------------------------------------------------- Page 6
-elif page == "6. Sensitivity":
+elif page == "4. Sensitivity":
     _require_record()
     record = st.session_state.record
     st.header("Sensitivity")
@@ -603,8 +529,56 @@ elif page == "6. Sensitivity":
             "live record, so it updates too."
         )
 
-# ---------------------------------------------------------------- Page 7
-elif page == "7. Recommendation":
+# ---------------------------------------------------------------- Page 5
+elif page == "5. Risk Register":
+    _require_record()
+    record = st.session_state.record
+    st.header("Risk Register")
+
+    if not record.opportunities:
+        st.warning("Run Independent Assessments first to generate opportunities.")
+        st.stop()
+
+    if not record.risks and st.session_state.vector_store_id:
+        if st.button("Generate risk register, integration plan, and review", type="primary"):
+            with st.spinner("Planning integration and identifying risks..."):
+                record = orchestrator.run_integration_stage(record, st.session_state.vector_store_id)
+            with st.spinner("Running reviewer checks..."):
+                record = orchestrator.run_review_stage(
+                    record, st.session_state.tool_call_log, st.session_state.document_names
+                )
+            with st.spinner("Writing executive summary..."):
+                record = orchestrator.generate_executive_summary(record, st.session_state.vector_store_id)
+            st.session_state.record = record
+            save_analysis(record)
+
+    if not record.risks:
+        st.info("Click the button above to identify risks (this also builds the 100-Day Plan and executive summary).")
+        st.stop()
+
+    st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
+    ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
+    st.table(
+        [
+            {
+                "Risk": r.title,
+                "Category": r.category,
+                "Likelihood": r.likelihood.value,
+                "Impact": r.severity.value,
+                "Score": r.score,
+                "Mitigation": r.mitigation,
+            }
+            for r in ranked_risks
+        ]
+    )
+
+    for r in ranked_risks:
+        if r.evidence:
+            with st.expander(f"Evidence: {r.title}"):
+                _evidence_lines(r.evidence)
+
+# ---------------------------------------------------------------- Page 6
+elif page == "6. Recommendation":
     _require_record()
     record = st.session_state.record
     st.header("Recommendation")
@@ -648,6 +622,30 @@ elif page == "7. Recommendation":
         "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
     )
 
+# ---------------------------------------------------------------- Page 7
+elif page == "7. 100-Day Plan":
+    _require_record()
+    record = st.session_state.record
+    st.header("100-Day Integration Plan")
+
+    if not record.integration_plan:
+        st.warning("Run the generation step on Risk Register first to build the integration plan.")
+        st.stop()
+
+    st.subheader("Plan")
+    for phase in ("0-30 days", "31-60 days", "61-100 days"):
+        actions = [a for a in record.integration_plan.actions if a.phase == phase]
+        if not actions:
+            continue
+        st.markdown(f"**{phase}**")
+        for a in actions:
+            st.markdown(f"- **{_md(a.title)}** ({a.owner_role}) — {_md(a.description)}")
+    if record.integration_plan.guiding_principles:
+        st.markdown("**Guiding principles**")
+        for principle in record.integration_plan.guiding_principles:
+            st.markdown(f"- {_md(principle)}")
+    st.caption(f"Governance: {_md(record.integration_plan.governance)}")
+
 # ---------------------------------------------------------------- Page 8
 elif page == "8. Executive Summary":
     _require_record()
@@ -655,7 +653,7 @@ elif page == "8. Executive Summary":
     st.header("Executive Summary")
 
     if not record.executive_summary and not record.integration_plan:
-        st.warning("Run the 100-Day Plan generation step first to write the executive summary.")
+        st.warning("Run the generation step on Risk Register first to write the executive summary.")
         st.stop()
 
     if record.executive_summary:
@@ -803,7 +801,7 @@ elif page == "10. Tables":
         else:
             st.caption("No issues flagged.")
         st.caption(
-            "This reflects the reviewer snapshot from the last time 100-Day Plan generated it — "
+            "This reflects the reviewer snapshot from the last time Risk Register generated it — "
             "see Recommendation for a live-recomputed check against your current assumptions."
         )
 
