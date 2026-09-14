@@ -1,0 +1,80 @@
+"""Optional stage: sensitivity / tornado analysis.
+
+Pure, deterministic, no LLM: reuses tools/financial_calculator.py to show which single
+assumption moves total value creation the most, holding every other assumption fixed at
+its current value. This is the standard "tornado chart" a deal team builds around a
+synergy case, not a model-generated narrative.
+"""
+
+from __future__ import annotations
+
+from schemas.analysis_models import ValueOpportunity
+from tools.financial_calculator import TOOL_FUNCTIONS
+
+DEFAULT_SWING_PCT = 0.20  # +/-20% swing for a parameter with no stated low/high sibling
+
+
+def _param_bounds(param: str, inputs: dict) -> tuple[float, float] | None:
+    """(low, high) to swing one parameter across, holding the rest of `inputs` fixed.
+
+    A `_base` parameter that has `_low`/`_high` siblings (e.g. reduction_pct_base next to
+    reduction_pct_low/high) uses those already-stated bounds. A `_low`/`_high` parameter
+    itself is skipped — its sibling `_base` entry already covers that swing. Anything else
+    (a cost or revenue base, a margin) gets a default +/-20% swing, clamped to [0, 1] for
+    fraction-like ("pct") parameters and to a non-negative floor otherwise.
+    """
+    value = inputs.get(param)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    if param.endswith("_low") or param.endswith("_high"):
+        return None
+    if param.endswith("_base"):
+        low_key = param[: -len("_base")] + "_low"
+        high_key = param[: -len("_base")] + "_high"
+        if low_key in inputs and high_key in inputs:
+            return float(inputs[low_key]), float(inputs[high_key])
+    low = value * (1 - DEFAULT_SWING_PCT)
+    high = value * (1 + DEFAULT_SWING_PCT)
+    if "pct" in param:
+        low, high = max(0.0, low), min(1.0, high)
+    else:
+        low = max(0.0, low)
+    return float(low), float(high)
+
+
+def compute_tornado_rows(opportunities: list[ValueOpportunity]) -> list[dict]:
+    """One row per (opportunity, assumption), ranked by how much swinging that single
+    assumption to its low/high bound moves total value creation across all opportunities,
+    everything else held at its current value.
+    """
+    total_base = sum(o.estimated_value.base for o in opportunities)
+    rows: list[dict] = []
+    for o in opportunities:
+        fn = TOOL_FUNCTIONS.get(o.calculation_method)
+        if not fn or not o.calculation_inputs:
+            continue
+        for param in o.calculation_inputs:
+            bounds = _param_bounds(param, o.calculation_inputs)
+            if bounds is None:
+                continue
+            low_bound, high_bound = bounds
+            try:
+                low_result = fn(**{**o.calculation_inputs, param: low_bound})
+                high_result = fn(**{**o.calculation_inputs, param: high_bound})
+            except ValueError:
+                continue
+            opp_low = min(low_result["base"], high_result["base"])
+            opp_high = max(low_result["base"], high_result["base"])
+            total_low = total_base - o.estimated_value.base + opp_low
+            total_high = total_base - o.estimated_value.base + opp_high
+            rows.append(
+                {
+                    "opportunity": o.title,
+                    "parameter": param,
+                    "total_low": round(total_low, 2),
+                    "total_high": round(total_high, 2),
+                    "swing": round(abs(total_high - total_low), 2),
+                }
+            )
+    rows.sort(key=lambda r: r["swing"], reverse=True)
+    return rows

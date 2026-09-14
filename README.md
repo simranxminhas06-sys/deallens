@@ -246,9 +246,11 @@ streamlit run app.py
 That's enough to try **Demo mode** — no API key, no cost. In the sidebar,
 keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
 "Load demo case." Then browse **2. Evidence**, **3. Independent Assessments**
-(the debate transcript), and **4. 100-Day Plan** (risk register, plan, reviewer
-findings, executive summary, and a downloadable report) — everything is
-already populated.
+(the debate transcript, with live sliders on each opportunity to drag its
+underlying assumptions and watch the estimate recompute), **4. 100-Day Plan**
+(risk register, plan, reviewer findings, executive summary, and a downloadable
+report), and **5. Sensitivity** (a tornado chart ranking which assumption
+moves total value creation the most) — everything is already populated.
 
 For a **live run** against real OpenAI calls: switch the sidebar to "Live
 (OpenAI)", set `OPENAI_API_KEY` in your environment first —
@@ -272,11 +274,13 @@ Run tests any time (no API key needed) with `pytest`.
 Staged so each piece is working before the next is added:
 
 1. ✅ Strategy, Financial, and Red-Team agents debating in Independent Assessments, with a no-API-key demo mode (this version).
-2. **Investment Committee Agent** — reviews the three assessments, explains where they disagree, and issues a Proceed / Proceed with conditions / Further diligence / Do not proceed verdict.
-3. **Interactive scenario simulator** — sliders for purchase price, growth/synergy assumptions, implementation cost, time-to-synergy, and churn, that re-run the Financial and Red-Team agents against the changed inputs.
-4. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
-5. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-6. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+2. ✅ **Interactive scenario assumptions** — every opportunity's underlying assumptions (cost/revenue base, reduction/uplift %, margin) are live sliders on Independent Assessments, recomputed instantly via the real `financial_calculator` functions (`agent/sensitivity.py`, no LLM call).
+3. ✅ **Sensitivity / tornado chart** — the Sensitivity page ranks every assumption by how much swinging it alone (others held fixed) moves total value creation, the standard deal-team sensitivity view (this version).
+4. **Investment Committee Agent** — reviews the three assessments, explains where they disagree, and issues a Proceed / Proceed with conditions / Further diligence / Do not proceed verdict.
+5. **Synergy ramp/phasing** — phase opportunity value in over multiple years instead of a single static annual run-rate, and separate one-time cost-to-achieve from the run-rate benefit.
+6. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
+7. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+8. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

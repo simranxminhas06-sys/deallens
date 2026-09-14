@@ -12,11 +12,14 @@ import os
 import tempfile
 from pathlib import Path
 
+import altair as alt
+import pandas as pd
 import streamlit as st
 
 from agent import orchestrator
 from agent.demo_fixtures import DOCUMENT_NAMES as DEMO_DOCUMENT_NAMES
 from agent.demo_fixtures import run_demo_pipeline
+from agent.sensitivity import compute_tornado_rows
 from db.database import list_analyses, load_analysis, save_analysis
 from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions
 from tools.financial_calculator import TOOL_FUNCTIONS
@@ -41,7 +44,7 @@ if not is_demo and not os.environ.get("OPENAI_API_KEY"):
 
 page = st.sidebar.radio(
     "Workflow",
-    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan"],
+    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan", "5. Sensitivity"],
 )
 
 with st.sidebar.expander("Saved analyses"):
@@ -135,6 +138,40 @@ def _render_scenario_controls(o, key_prefix: str) -> None:
         st.session_state[gen_key] = gen + 1
         save_analysis(st.session_state.record)
         st.rerun()
+
+
+def _short_title(title: str, max_len: int = 24) -> str:
+    return title if len(title) <= max_len else title[: max_len - 1].rstrip() + "…"
+
+
+def _render_tornado_chart(rows: list[dict], total_base: float, max_rows: int = 8) -> None:
+    top_rows = rows[:max_rows]
+    df = pd.DataFrame(top_rows)
+    df["label"] = [
+        f"{_short_title(r['opportunity'])} — {_pretty_param_label(r['parameter'])}" for r in top_rows
+    ]
+    order = df["label"].tolist()
+    bars = (
+        alt.Chart(df)
+        .mark_bar(size=18, color="#E4572E")
+        .encode(
+            y=alt.Y("label:N", sort=order, title=None, axis=alt.Axis(labelLimit=240)),
+            x=alt.X("total_low:Q", title="Total value creation ($)", axis=alt.Axis(format="$,.2s")),
+            x2="total_high:Q",
+            tooltip=[
+                alt.Tooltip("label:N", title="Assumption"),
+                alt.Tooltip("total_low:Q", title="If swung low", format="$,.0f"),
+                alt.Tooltip("total_high:Q", title="If swung high", format="$,.0f"),
+                alt.Tooltip("swing:Q", title="Swing", format="$,.0f"),
+            ],
+        )
+    )
+    base_rule = (
+        alt.Chart(pd.DataFrame({"base": [total_base]}))
+        .mark_rule(color="#888888", strokeDash=[4, 4])
+        .encode(x="base:Q")
+    )
+    st.altair_chart((bars + base_rule).properties(height=32 * len(top_rows) + 20), use_container_width=True)
 
 
 ROLE_LABEL = {AgentRole.STRATEGY: "Strategy Agent", AgentRole.FINANCIAL: "Financial Agent", AgentRole.RED_TEAM: "Red-Team Agent"}
@@ -373,3 +410,42 @@ elif page == "4. 100-Day Plan":
     if record.executive_summary or record.integration_plan:
         report_md = generate_report(record)
         st.download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
+
+# ---------------------------------------------------------------- Page 5
+elif page == "5. Sensitivity":
+    _require_record()
+    record = st.session_state.record
+    st.header("Sensitivity")
+    st.caption(
+        "Which single assumption moves total value creation the most? Each bar swings just "
+        "one assumption to its low/high bound, holding every other assumption at its current "
+        "value, recomputed live via the same financial_calculator functions the Financial "
+        "Agent used — no LLM call, so this is free to explore."
+    )
+
+    if not record.opportunities:
+        st.warning("Run Independent Assessments first to generate opportunities.")
+        st.stop()
+
+    total_base = sum(o.estimated_value.base for o in record.opportunities)
+    st.metric("Total value creation (base case)", f"${total_base:,.0f}")
+
+    rows = compute_tornado_rows(record.opportunities)
+    if not rows:
+        st.info("No opportunity has recorded calculation inputs to analyze yet.")
+    else:
+        _render_tornado_chart(rows, total_base)
+        with st.expander("How this is computed"):
+            st.write(
+                "For each assumption, this swaps only that one value to its low and high "
+                "bound and recomputes that opportunity's base estimate, holding every other "
+                "assumption fixed. A `_base` percentage (e.g. a synergy reduction rate) uses "
+                "the opportunity's own stated low/high; a cost or revenue base or a margin "
+                "with no stated range gets a default ±20% swing. The bar shows the resulting "
+                "swing in total value creation across every opportunity. The dashed line marks "
+                "the current base case."
+            )
+        st.caption(
+            "Changed an assumption on Independent Assessments? This chart reads the same "
+            "live record, so it updates too."
+        )
