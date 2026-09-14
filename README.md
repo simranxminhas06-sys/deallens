@@ -1,11 +1,24 @@
 # DealLens
 
-DealLens is a focused prototype that turns an acquirer's and a target's public
-documents (annual reports, investor presentations, financial statements) into a
-cited, structured value-creation analysis: company profiles, strategic
-rationale, revenue and cost synergy opportunities, a risk register, a 100-day
-integration plan, and an executive summary — every factual claim tagged as a
-documented fact, a calculated result, an assumption, or a hypothesis.
+DealLens turns an acquirer's and a target's public documents (annual reports,
+investor presentations, financial statements) into a cited, structured
+value-creation analysis — and, instead of one agent writing one report, three
+specialized agents examine the deal from competing angles and argue about it:
+
+- **Strategy Agent** — tests the acquisition rationale, market attractiveness, growth case
+- **Financial Agent** — extracts figures, builds low/base/high scenarios, calculates synergies
+- **Red-Team Agent** — argues against the deal, hunts for unsupported claims, challenges the other two agents by name
+
+Every factual claim is tagged as a documented fact, a calculated result, an
+assumption, or a hypothesis, and a deterministic reviewer stage independently
+re-checks citations and calculations rather than trusting the agents' own
+self-report.
+
+**Try it with no API key and no cost**: pick "Demo (no API key)" in the
+sidebar and click "Load demo case" — it runs the full pipeline, war-room
+debate included, against a hand-authored Amazon/Whole Foods fixture
+(`agent/demo_fixtures.py`). "Live (OpenAI)" mode runs the same pipeline for
+real against uploaded documents.
 
 Demo case: **Amazon's 2017 acquisition of Whole Foods Market**, using simplified
 synthetic documents in [`sample_data/`](sample_data/) (not the real filings — see
@@ -30,12 +43,11 @@ transaction assumptions), it produces:
 
 1. Company profiles (business description, financials, segments)
 2. Strategic rationale for the acquisition
-3. Revenue opportunities
-4. Cost-saving opportunities
+3. A three-agent war-room debate: Strategy's case, Financial's numbers, Red-Team's challenges to both
+4. Revenue and cost-saving opportunities (from the Financial Agent, with low/base/high scenarios)
 5. Operational and organizational risks
-6. Preliminary financial scenarios (low / base / high)
-7. A 100-day integration plan
-8. An executive summary with citations
+6. A 100-day integration plan
+7. An executive summary with citations
 
 ## How the workflow operates
 
@@ -51,9 +63,10 @@ Document Researcher extracts profiles + rationale, with citations
         |
 [ USER APPROVES ASSUMPTIONS ]                 (gate before any financial scenario math)
         |
-Financial tool calculates baseline metrics    (agent/value_creation.py + tools/financial_calculator.py)
-        |
-Value Creation Analyst develops opportunities (agent/value_creation.py)
+AGENT WAR ROOM:
+  Strategy Agent assesses the rationale        (agent/strategy_agent.py)
+  Financial Agent computes baselines + opportunities with financial_calculator (agent/financial_agent.py)
+  Red-Team Agent challenges both by name, citing evidence gaps  (agent/red_team_agent.py)
         |
 Integration Planner builds risk register + 100-day plan  (agent/integration_planner.py)
         |
@@ -64,7 +77,11 @@ Final report generated with executive summary  (tools/report_generator.py)
 
 `agent/orchestrator.py` wires these together; each function takes and returns
 an `AnalysisRecord`, so the Streamlit app can run one stage, show its output,
-and let the user proceed (or stop) before the next.
+and let the user proceed (or stop) before the next. The three war-room agents
+are separate Responses API calls with separate instructions/roles — deliberately
+built on the same primitives as the rest of the pipeline (structured outputs +
+function calling + file_search) rather than a separate agent framework, so the
+whole system stays in one mental model.
 
 ## Tools the agent can call
 
@@ -100,6 +117,21 @@ Every extracted fact and every proposed opportunity is a Pydantic model
 `calculation_method` — see [`example_outputs/sample_opportunity.json`](example_outputs/sample_opportunity.json)
 for the full shape.
 
+## The agent war room
+
+Rather than one agent producing one blended narrative, three agents assess
+the deal independently and then argue about it — this is the "memorable
+feature" of the product, and it's a real structural choice, not UI dressing:
+
+- `agent/strategy_agent.py` — market attractiveness, whether the stated rationale holds up, growth case, competitive comparison
+- `agent/financial_agent.py` — wraps `agent/value_creation.py`'s baseline + opportunity generation, then writes a position paragraph that names its own weakest estimate
+- `agent/red_team_agent.py` — searches the documents to check whether the other two agents' claims are actually supported, then issues `Challenge` objects naming exactly which agent and which claim/opportunity title it's disputing — plus a deterministic pass that reuses the reviewer's own precision/citation heuristics, so Red-Team catches what a spreadsheet-literal check catches, not just what reads persuasively
+
+Each `AgentAssessment` (`schemas/analysis_models.py`) carries a one-paragraph
+`position` (the debate line you see in the UI), cited `key_findings`, and
+either `opportunities` (Financial) or `challenges` (Red-Team). The Streamlit
+"Agent War Room" page renders these as a chat transcript.
+
 ## The reviewer stage
 
 [`agent/reviewer.py`](agent/reviewer.py) is deterministic Python, not another
@@ -107,7 +139,7 @@ LLM call grading itself. `review_analysis()` rejects or flags:
 
 - **Missing citations** — any `documented_fact` or `calculated_result` claim without one
 - **Incorrect calculations** — cross-checks each opportunity's reported value against the actual logged `financial_calculator` tool call output
-- **Assumptions presented as facts** — flags `documented_fact` claims containing hedging language ("assume," "approximately," "likely," ...)
+- **Assumptions presented as facts** — flags `documented_fact` claims containing speculative language ("assume," "likely," "projected," ...) — deliberately excludes "approximately"/"estimated," which are normal in a company's own rounded, audited figures and would otherwise false-positive on legitimate facts
 - **Duplicate recommendations** — title-similarity check across opportunities
 - **Unrealistically precise estimates** — flags dollar figures with more significant figures than diligence-stage analysis supports
 - **Recommendations unrelated to the supplied documents** — flags opportunities with no citation to an uploaded document
@@ -124,6 +156,13 @@ which feed the evaluation metrics below.
   `AnalysisRecord` objects: missing citations, calculation mismatches,
   duplicate opportunities, false precision, citation-coverage percentage, and
   document-grounding. No API key required.
+- `tests/test_demo_mode.py` — runs the full fixture-based pipeline
+  (`agent/demo_fixtures.py`) end to end and asserts: all three war-room agents
+  are present, Red-Team actually challenges the Financial Agent, the real
+  reviewer flags the deliberately under-evidenced opportunity, the
+  cost-synergy calculation is *not* flagged, and two runs are byte-identical
+  (no hidden randomness). No API key required — this is the fastest way to
+  sanity-check the whole system after a change.
 
 Run them with:
 
@@ -132,8 +171,8 @@ pytest
 ```
 
 **Not yet done** (see Known limitations): an end-to-end evaluation of the live
-LLM stages (researcher, value-creation analyst, integration planner) against
-the three-sample-transaction methodology described in the project brief —
+LLM stages (researcher, war-room agents, integration planner) against the
+three-sample-transaction methodology described in the project brief —
 percentage of claims with valid citations *in a real run*, calculation
 accuracy *in a real run*, run-to-run consistency, and whether major risks are
 identified. Those numbers require actually invoking the OpenAI Responses API
@@ -141,6 +180,10 @@ and are not included here until measured.
 
 ## Known limitations
 
+- **Demo mode is a fixture, not evidence of live accuracy.** It proves the
+  data model, war-room wiring, and reviewer logic are internally consistent —
+  it says nothing about how well the live LLM agents will actually perform
+  against real documents.
 - **No end-to-end run has been evaluated yet.** The reviewer, calculator, and
   schemas are unit-tested; the LLM stages (researcher/analyst/planner) have not
   been run and scored against real output. Do not treat any citation-accuracy
@@ -169,18 +212,43 @@ git clone <this-repo>
 cd deallens
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+streamlit run app.py
+```
+
+That's enough to try **Demo mode** — no API key, no cost. In the sidebar,
+keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
+"Load demo case." Then browse **2. Evidence**, **3. Agent War Room** (the
+debate transcript), and **4. 100-Day Plan** (risk register, plan, reviewer
+findings, executive summary, and a downloadable report) — everything is
+already populated.
+
+For a **live run** against real OpenAI calls: switch the sidebar to "Live
+(OpenAI)", set `OPENAI_API_KEY` in your environment first —
+
+```bash
 cp .env.example .env   # add your OPENAI_API_KEY
 export $(cat .env | xargs)
 streamlit run app.py
 ```
 
-Then, in the app: **1. Create Analysis** (keep the bundled sample documents
-checked, or upload your own) → **2. Evidence** (review extracted facts, approve
-assumptions) → **3. Value Creation** (run baseline + opportunities) →
-**4. 100-Day Plan** (run risk register, plan, reviewer, executive summary, and
-download the final report).
+— then work through the same four pages: **1. Create Analysis** (keep the
+bundled sample documents checked, or upload your own) → **2. Evidence**
+(review extracted facts, approve assumptions) → **3. Agent War Room** (run
+Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
+plan, reviewer, executive summary, and download the report).
 
 Run tests any time (no API key needed) with `pytest`.
+
+## Roadmap
+
+Staged so each piece is working before the next is added:
+
+1. ✅ Strategy, Financial, and Red-Team agents debating in the War Room, with a no-API-key demo mode (this version).
+2. **Investment Committee Agent** — reviews the three assessments, explains where they disagree, and issues a Proceed / Proceed with conditions / Further diligence / Do not proceed verdict.
+3. **Interactive scenario simulator** — sliders for purchase price, growth/synergy assumptions, implementation cost, time-to-synergy, and churn, that re-run the Financial and Red-Team agents against the changed inputs.
+4. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
+5. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+6. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

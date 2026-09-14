@@ -21,7 +21,7 @@ from schemas.analysis_models import (
 )
 from tools.financial_calculator import calculate_precision_flag
 
-HEDGE_WORDS = {"assume", "assumes", "assuming", "estimate", "estimated", "approximately", "roughly", "could", "might", "likely", "projected"}
+HEDGE_WORDS = {"assume", "assumes", "assuming", "could", "might", "likely", "projected", "probably", "presumably"}
 DUPLICATE_TITLE_THRESHOLD = 0.82
 
 

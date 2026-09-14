@@ -33,6 +33,12 @@ class RiskSeverity(str, Enum):
     HIGH = "high"
 
 
+class AgentRole(str, Enum):
+    STRATEGY = "strategy"
+    FINANCIAL = "financial"
+    RED_TEAM = "red_team"
+
+
 class Citation(BaseModel):
     source_document: str = Field(description="File name of the source document")
     location: str = Field(description="Page, section, or table reference within the document")
@@ -141,6 +147,21 @@ class ReviewResult(BaseModel):
     citation_coverage_pct: Optional[float] = None
 
 
+class Challenge(BaseModel):
+    target_agent: AgentRole
+    target_claim: str = Field(description="The opportunity title or claim text being challenged")
+    critique: str
+    severity: RiskSeverity
+
+
+class AgentAssessment(BaseModel):
+    role: AgentRole
+    position: str = Field(description="One-paragraph stance in the agent's voice, e.g. 'The revenue opportunity is plausible, but...'")
+    key_findings: list[EvidenceItem] = Field(default_factory=list)
+    opportunities: list[ValueOpportunity] = Field(default_factory=list, description="Populated by the Financial Agent")
+    challenges: list[Challenge] = Field(default_factory=list, description="Populated by the Red-Team Agent")
+
+
 class TransactionAssumptions(BaseModel):
     acquirer_name: str
     target_name: str
@@ -159,6 +180,7 @@ class AnalysisRecord(BaseModel):
     strategic_rationale: Optional[StrategicRationale] = None
     financial_baselines: list[FinancialBaseline] = Field(default_factory=list)
     opportunities: list[ValueOpportunity] = Field(default_factory=list)
+    agent_assessments: list[AgentAssessment] = Field(default_factory=list)
     risks: list[Risk] = Field(default_factory=list)
     integration_plan: Optional[IntegrationPlan] = None
     review: Optional[ReviewResult] = None

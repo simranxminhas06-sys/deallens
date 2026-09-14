@@ -5,7 +5,7 @@ this is deliberately not a black-box multi-agent loop.
 
 from __future__ import annotations
 
-from agent import integration_planner, researcher, value_creation
+from agent import financial_agent, integration_planner, red_team_agent, researcher, strategy_agent
 from agent.llm import create_vector_store_with_files, get_client
 from agent.reviewer import review_analysis
 from schemas.analysis_models import AnalysisRecord, TransactionAssumptions
@@ -35,26 +35,33 @@ def run_research_stage(record: AnalysisRecord, vector_store_id: str) -> Analysis
     return record
 
 
-def run_value_creation_stage(record: AnalysisRecord, vector_store_id: str) -> tuple[AnalysisRecord, list[dict]]:
+def run_war_room_stage(record: AnalysisRecord, vector_store_id: str) -> tuple[AnalysisRecord, list[dict]]:
+    """Strategy, Financial, and Red-Team agents assess the deal independently, then the
+    Red-Team agent challenges the other two — this is the debate shown on the War Room page.
+    """
     if not record.assumptions_approved:
         raise ValueError("Assumptions must be approved before running financial scenario analysis.")
 
-    baselines, baseline_log = value_creation.compute_financial_baseline(
+    strategy_assessment = strategy_agent.assess(
         record.transaction.acquirer_name, record.transaction.target_name, vector_store_id
     )
-    record.financial_baselines = baselines
+    financial_assessment, tool_call_log, baselines = financial_agent.assess(
+        record.transaction.acquirer_name,
+        record.transaction.target_name,
+        vector_store_id,
+        record.transaction.user_notes or "",
+    )
+    red_team_assessment = red_team_agent.assess(
+        record.transaction.acquirer_name,
+        record.transaction.target_name,
+        strategy_assessment,
+        financial_assessment,
+        vector_store_id,
+    )
 
-    assumptions_note = record.transaction.user_notes or ""
-    revenue_opps, revenue_log = value_creation.generate_opportunities(
-        record.transaction.acquirer_name, record.transaction.target_name, vector_store_id,
-        "revenue_synergy", assumptions_note,
-    )
-    cost_opps, cost_log = value_creation.generate_opportunities(
-        record.transaction.acquirer_name, record.transaction.target_name, vector_store_id,
-        "cost_synergy", assumptions_note,
-    )
-    record.opportunities = revenue_opps + cost_opps
-    tool_call_log = baseline_log + revenue_log + cost_log
+    record.agent_assessments = [strategy_assessment, financial_assessment, red_team_assessment]
+    record.opportunities = financial_assessment.opportunities
+    record.financial_baselines = baselines
     return record, tool_call_log
 
 
