@@ -141,7 +141,13 @@ def _strategy_assessment() -> AgentAssessment:
 
 
 def _cost_opportunity() -> tuple[ValueOpportunity, dict]:
-    calc = calculate_savings_scenario(1_500_000_000, 0.10, 0.15, 0.20)
+    calc_inputs = {
+        "baseline_cost": 1_500_000_000,
+        "reduction_pct_low": 0.10,
+        "reduction_pct_base": 0.15,
+        "reduction_pct_high": 0.20,
+    }
+    calc = calculate_savings_scenario(**calc_inputs)
     opp = ValueOpportunity(
         title="Consolidate overlapping distribution and cold-chain logistics",
         category=Category.COST_SYNERGY,
@@ -159,14 +165,22 @@ def _cost_opportunity() -> tuple[ValueOpportunity, dict]:
         time_horizon="12-18 months",
         key_risks=["Perishables service-level disruption during consolidation", "Union or labor-relations friction at affected distribution sites"],
         calculation_method="calculate_savings_scenario",
+        calculation_inputs=calc_inputs,
     )
-    tool_call = {"name": "calculate_savings_scenario", "arguments": {"baseline_cost": 1_500_000_000, "reduction_pct_low": 0.10, "reduction_pct_base": 0.15, "reduction_pct_high": 0.20}, "result": calc}
+    tool_call = {"name": "calculate_savings_scenario", "arguments": calc_inputs, "result": calc}
     return opp, tool_call
 
 
 def _revenue_opportunity() -> tuple[ValueOpportunity, dict]:
     """Deliberately under-evidenced — no citation — so the reviewer and Red Team have something real to flag."""
-    calc = calculate_revenue_scenario(800_000_000, 0.01, 0.015, 0.02, incremental_margin_pct=1.0)
+    calc_inputs = {
+        "baseline_revenue": 800_000_000,
+        "uplift_pct_low": 0.01,
+        "uplift_pct_base": 0.015,
+        "uplift_pct_high": 0.02,
+        "incremental_margin_pct": 1.0,
+    }
+    calc = calculate_revenue_scenario(**calc_inputs)
     opp = ValueOpportunity(
         title="Cross-sell Amazon Prime members into Whole Foods grocery delivery",
         category=Category.REVENUE_SYNERGY,
@@ -185,8 +199,9 @@ def _revenue_opportunity() -> tuple[ValueOpportunity, dict]:
         time_horizon="0-6 months",
         key_risks=["Cannibalizes existing Whole Foods in-store sales", "No pilot data to validate the assumed uplift rate"],
         calculation_method="calculate_revenue_scenario",
+        calculation_inputs=calc_inputs,
     )
-    tool_call = {"name": "calculate_revenue_scenario", "arguments": {"baseline_revenue": 800_000_000, "uplift_pct_low": 0.01, "uplift_pct_base": 0.015, "uplift_pct_high": 0.02, "incremental_margin_pct": 1.0}, "result": calc}
+    tool_call = {"name": "calculate_revenue_scenario", "arguments": calc_inputs, "result": calc}
     return opp, tool_call
 
 

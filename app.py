@@ -18,7 +18,8 @@ from agent import orchestrator
 from agent.demo_fixtures import DOCUMENT_NAMES as DEMO_DOCUMENT_NAMES
 from agent.demo_fixtures import run_demo_pipeline
 from db.database import list_analyses, load_analysis, save_analysis
-from schemas.analysis_models import AgentRole, TransactionAssumptions
+from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions
+from tools.financial_calculator import TOOL_FUNCTIONS
 from tools.report_generator import generate_report
 
 st.set_page_config(page_title="DealLens", layout="wide")
@@ -69,6 +70,71 @@ def _evidence_lines(evidence) -> None:
         ]
         cites = "; ".join(cite_strs) or "no citation"
         st.markdown(f"- **[{e.claim_type.value}]** {_md(e.claim)}  \n  _{cites}_")
+
+
+def _pretty_param_label(param: str) -> str:
+    return param.replace("_pct", "").replace("_", " ").strip().capitalize()
+
+
+def _render_scenario_controls(o, key_prefix: str) -> None:
+    """Lets the viewer drag the exact assumptions fed into `o.calculation_method` and see the
+    low/base/high estimate recompute live via the real financial_calculator function — no LLM
+    call, so this works in Demo mode with no API key.
+
+    Widget keys carry a "generation" suffix that only changes on Reset. Streamlit widgets don't
+    reliably drop a value just because a session_state key was popped after the widget already
+    rendered once with it; bumping the generation forces genuinely fresh widgets instead.
+    """
+    fn = TOOL_FUNCTIONS.get(o.calculation_method)
+    if not fn or not o.calculation_inputs:
+        return
+
+    orig_key = f"{key_prefix}_orig"
+    if orig_key not in st.session_state:
+        st.session_state[orig_key] = dict(o.calculation_inputs)
+    gen_key = f"{key_prefix}_gen"
+    gen = st.session_state.setdefault(gen_key, 0)
+
+    if not st.toggle("Adjust scenario assumptions", value=True, key=f"{key_prefix}_toggle"):
+        return
+
+    st.caption(
+        "Drag an assumption to see the estimate recompute instantly via the real "
+        f"`{o.calculation_method}` function — the same one the Financial Agent called."
+    )
+    updated = {}
+    for param, value in o.calculation_inputs.items():
+        widget_key = f"{key_prefix}_{param}_{gen}"
+        if "pct" in param:
+            updated[param] = st.slider(
+                _pretty_param_label(param), 0.0, 100.0, float(value) * 100, step=0.5,
+                key=widget_key, format="%.1f%%",
+            ) / 100
+        else:
+            updated[param] = st.number_input(
+                f"{_pretty_param_label(param)} ($M)", value=float(value) / 1_000_000, step=10.0, key=widget_key,
+            ) * 1_000_000
+
+    if updated != o.calculation_inputs:
+        try:
+            result = fn(**updated)
+        except ValueError as exc:
+            st.warning(f"Can't recalculate with these inputs: {exc}")
+            return
+        o.calculation_inputs = updated
+        o.estimated_value = EstimatedValue(low=result["low"], base=result["base"], high=result["high"])
+        st.session_state.tool_call_log.append({"name": o.calculation_method, "arguments": updated, "result": result})
+        save_analysis(st.session_state.record)
+
+    st.markdown(f"Recalculated estimate: **{_md(o.estimated_value.as_range_string())}**")
+    if st.button("Reset to original assumptions", key=f"{key_prefix}_reset_{gen}"):
+        original = st.session_state[orig_key]
+        result = fn(**original)
+        o.calculation_inputs = dict(original)
+        o.estimated_value = EstimatedValue(low=result["low"], base=result["base"], high=result["high"])
+        st.session_state[gen_key] = gen + 1
+        save_analysis(st.session_state.record)
+        st.rerun()
 
 
 ROLE_LABEL = {AgentRole.STRATEGY: "Strategy Agent", AgentRole.FINANCIAL: "Financial Agent", AgentRole.RED_TEAM: "Red-Team Agent"}
@@ -232,10 +298,12 @@ elif page == "3. Independent Assessments":
                 with st.expander("Key findings"):
                     _evidence_lines(assessment.key_findings)
             if assessment.opportunities:
-                with st.expander(f"Opportunities ({len(assessment.opportunities)})"):
-                    for o in assessment.opportunities:
-                        st.markdown(f"- **{_md(o.title)}** — base \\${o.estimated_value.base:,.0f} ({_md(o.estimated_value.as_range_string())})")
-                        st.caption(_md(f"Assumptions: {'; '.join(o.assumptions)}"))
+                with st.expander(f"Opportunities ({len(assessment.opportunities)})", expanded=True):
+                    for i, o in enumerate(assessment.opportunities):
+                        with st.container(border=True):
+                            st.markdown(f"**{_md(o.title)}** — base \\${o.estimated_value.base:,.0f} ({_md(o.estimated_value.as_range_string())})")
+                            st.caption(_md(f"Assumptions: {'; '.join(o.assumptions)}"))
+                            _render_scenario_controls(o, key_prefix=f"scn_{assessment.role.value}_{i}")
             if assessment.challenges:
                 for c in assessment.challenges:
                     st.markdown(

@@ -98,6 +98,10 @@ class ValueOpportunity(BaseModel):
     calculation_method: Optional[str] = Field(
         default=None, description="Name of the financial_calculator function used, if any"
     )
+    calculation_inputs: dict = Field(
+        default_factory=dict,
+        description="Exact keyword arguments passed to calculation_method, so the estimate can be recomputed live from adjusted assumptions",
+    )
 
 
 class Risk(BaseModel):

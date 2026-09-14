@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from agent import value_creation
 from agent.llm import get_client
-from schemas.analysis_models import AgentAssessment, AgentRole, EvidenceItem, FinancialBaseline
+from schemas.analysis_models import AgentAssessment, AgentRole, EvidenceItem, FinancialBaseline, ValueOpportunity
+
+CALC_TOOL_NAMES = ("calculate_savings_scenario", "calculate_revenue_scenario")
 
 FINANCIAL_INSTRUCTIONS = """You are the Financial Agent in an M&A investment committee. You are
 skeptical by default: every dollar figure must trace to a financial_calculator tool call, and you
@@ -43,6 +45,29 @@ def _position_statement(
     return response.output_text
 
 
+def _attach_calculation_inputs(opportunities: list[ValueOpportunity], tool_call_log: list[dict]) -> None:
+    """Backfills calculation_inputs from the logged tool call that produced each opportunity's
+    estimate, so the UI can recompute the estimate live from adjusted assumptions. Matched the same
+    way agent/reviewer.py::_check_calculation_consistency cross-checks the value — deterministically,
+    not by asking the model to retype the arguments it already passed to the tool.
+    """
+    calc_calls = [c for c in tool_call_log if c["name"] in CALC_TOOL_NAMES]
+    for o in opportunities:
+        if not o.calculation_method or o.calculation_inputs:
+            continue
+        match = next(
+            (
+                c
+                for c in calc_calls
+                if c["name"] == o.calculation_method
+                and abs(c["result"].get("base", -1) - o.estimated_value.base) < max(1.0, 0.01 * abs(o.estimated_value.base))
+            ),
+            None,
+        )
+        if match:
+            o.calculation_inputs = match["arguments"]
+
+
 def assess(
     acquirer_name: str, target_name: str, vector_store_id: str, assumptions_note: str = ""
 ) -> tuple[AgentAssessment, list[dict], list[FinancialBaseline]]:
@@ -57,6 +82,7 @@ def assess(
     )
     opportunities = revenue_opps + cost_opps
     tool_call_log = baseline_log + revenue_log + cost_log
+    _attach_calculation_inputs(opportunities, tool_call_log)
 
     position = _position_statement(acquirer_name, target_name, baselines, opportunities)
     key_findings = [
