@@ -21,8 +21,16 @@ from schemas.analysis_models import AnalysisRecord, EvidenceItem
 from tools.financial_calculator import calculate_deal_economics, calculate_ramp_adjusted_value
 
 NAVY = colors.HexColor("#1B2A4A")
-ACCENT = colors.HexColor("#2F6FED")
+ACCENT = colors.HexColor("#3B7AFF")
 LIGHT_GRAY = colors.HexColor("#F2F4F7")
+VERDICT_TEXT = colors.HexColor("#0B1220")
+
+VERDICT_COLOR = {
+    "proceed": colors.HexColor("#1FA971"),
+    "proceed_with_conditions": colors.HexColor("#F5A623"),
+    "further_diligence": colors.HexColor("#8B6BF2"),
+    "do_not_proceed": colors.HexColor("#E5484D"),
+}
 
 VERDICT_LABEL = {
     "proceed": "Proceed",
@@ -38,7 +46,7 @@ _styles.add(ParagraphStyle("DLH1", parent=_styles["Heading1"], textColor=NAVY, s
 _styles.add(ParagraphStyle("DLH2", parent=_styles["Heading2"], textColor=ACCENT, spaceBefore=10, spaceAfter=4, fontSize=12))
 _styles.add(ParagraphStyle("DLBody", parent=_styles["Normal"], alignment=TA_LEFT, spaceAfter=6, leading=14))
 _styles.add(ParagraphStyle("DLCaption", parent=_styles["Normal"], textColor=colors.gray, fontSize=8.5, leading=11, spaceAfter=6))
-_styles.add(ParagraphStyle("DLVerdict", parent=_styles["Heading2"], textColor=colors.white, fontSize=13, leading=16))
+_styles.add(ParagraphStyle("DLVerdict", parent=_styles["Heading2"], textColor=VERDICT_TEXT, fontSize=13, leading=16))
 
 _TABLE_HEADER_STYLE = TableStyle(
     [
@@ -103,7 +111,7 @@ def generate_pdf(record: AnalysisRecord) -> bytes:
             colWidths=[6.5 * inch],
         )
         verdict_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), ACCENT),
+            ("BACKGROUND", (0, 0), (-1, -1), VERDICT_COLOR[verdict.level.value]),
             ("LEFTPADDING", (0, 0), (-1, -1), 10),
             ("TOPPADDING", (0, 0), (-1, -1), 8),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 8),

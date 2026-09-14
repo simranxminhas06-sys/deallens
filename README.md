@@ -27,6 +27,15 @@ synthetic documents in [`sample_data/`](sample_data/) (not the real filings — 
 that folder's README) so the output can be sanity-checked against what actually
 happened post-close.
 
+The visual theme (navy/charcoal with a bright blue accent) lives in
+[`.streamlit/config.toml`](.streamlit/config.toml) — Streamlit's own theming
+API, not a CSS override — plus a small, deliberately conservative CSS block at
+the top of `app.py` for metric cards, headers, and buttons, targeting only
+`data-testid` attributes (stable across Streamlit versions) rather than its
+internal hashed class names. The verdict banner and evidence-type badges are
+custom-rendered (not `st.success`/`st.warning`) so their colors are consistent
+with the theme instead of Streamlit's default alert palette.
+
 ## The business problem
 
 Early-stage M&A value-creation analysis is slow, manual, and hard to audit:

@@ -29,7 +29,48 @@ from tools.financial_calculator import TOOL_FUNCTIONS, calculate_deal_economics,
 from tools.pdf_generator import generate_pdf
 from tools.report_generator import generate_report
 
-st.set_page_config(page_title="DealLens", layout="wide")
+st.set_page_config(page_title="DealLens", layout="wide", page_icon="📊")
+
+# Targeted CSS on top of .streamlit/config.toml's theme colors. Only verified-stable
+# data-testid/class selectors are used here (checked against the running app's DOM) —
+# Streamlit's internal "st-emotion-cache-*" hash classes are deliberately avoided since
+# they change across versions and would silently stop working on an upgrade.
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] h1 {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        background: linear-gradient(90deg, #3B7AFF, #7FB0FF);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.25rem;
+    }
+    h1 { letter-spacing: -0.015em; }
+    h2, h3 { letter-spacing: -0.01em; }
+    [data-testid="stMetric"] {
+        background: rgba(59, 122, 255, 0.08);
+        border: 1px solid rgba(59, 122, 255, 0.28);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+    }
+    [data-testid="stMetricValue"] { font-weight: 700; }
+    [data-testid="stMetricLabel"] {
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.72rem;
+        opacity: 0.75;
+    }
+    button[data-testid="stBaseButton-primary"],
+    button[data-testid="stBaseButton-secondary"] {
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 for key, default in {
     "record": None,
@@ -226,13 +267,21 @@ VERDICT_LABEL = {
     VerdictLevel.FURTHER_DILIGENCE: "Further diligence required",
     VerdictLevel.DO_NOT_PROCEED: "Do not proceed",
 }
-# st.success/warning/error render with Streamlit's own status styling, no emoji needed
-VERDICT_ALERT_FN = {
-    VerdictLevel.PROCEED: st.success,
-    VerdictLevel.PROCEED_WITH_CONDITIONS: st.warning,
-    VerdictLevel.FURTHER_DILIGENCE: st.warning,
-    VerdictLevel.DO_NOT_PROCEED: st.error,
+VERDICT_COLOR = {
+    VerdictLevel.PROCEED: "#1FA971",
+    VerdictLevel.PROCEED_WITH_CONDITIONS: "#F5A623",
+    VerdictLevel.FURTHER_DILIGENCE: "#8B6BF2",
+    VerdictLevel.DO_NOT_PROCEED: "#E5484D",
 }
+
+
+def _render_verdict_banner(level: VerdictLevel) -> None:
+    color = VERDICT_COLOR[level]
+    st.markdown(
+        f'<div style="background:{color};color:#0B1220;padding:1rem 1.25rem;border-radius:10px;'
+        f'font-size:1.15rem;font-weight:700;margin-bottom:0.5rem;">{html.escape(VERDICT_LABEL[level])}</div>',
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------- Page 1
 if page == "1. Create Analysis":
@@ -571,7 +620,7 @@ elif page == "6. Recommendation":
     total_value = sum(o.estimated_value.base for o in record.opportunities)
     verdict = compute_verdict(fresh_review, record.agent_assessments, total_value, record.transaction)
 
-    VERDICT_ALERT_FN[verdict.level](VERDICT_LABEL[verdict.level])
+    _render_verdict_banner(verdict.level)
 
     st.subheader("Why")
     for reason in verdict.reasons:
