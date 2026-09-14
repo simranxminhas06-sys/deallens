@@ -449,3 +449,12 @@ elif page == "5. Sensitivity":
             "Changed an assumption on Independent Assessments? This chart reads the same "
             "live record, so it updates too."
         )
+
+# ---------------------------------------------------------------- Sidebar: live totals
+# Placed at the end of the script (not with the rest of the sidebar near the top) so it
+# reflects any scenario-assumption edit made by the page body above, in this same run —
+# Streamlit lets you append to st.sidebar from anywhere in the script.
+if st.session_state.record and st.session_state.record.opportunities:
+    total_value = sum(o.estimated_value.base for o in st.session_state.record.opportunities)
+    st.sidebar.divider()
+    st.sidebar.metric("Total value creation (base case)", f"${total_value:,.0f}")
