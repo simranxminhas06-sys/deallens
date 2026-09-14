@@ -55,13 +55,23 @@ st.markdown(
         border-radius: 10px;
         padding: 0.75rem 1rem;
     }
-    [data-testid="stMetricValue"] { font-weight: 700; }
+    [data-testid="stMetricValue"] {
+        font-weight: 700;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        font-size: 1.5rem;
+    }
+    [data-testid="stMetricValue"] div { white-space: normal; }
     [data-testid="stMetricLabel"] {
         text-transform: uppercase;
         letter-spacing: 0.04em;
         font-size: 0.72rem;
         opacity: 0.75;
+        white-space: normal;
+        overflow-wrap: break-word;
     }
+    [data-testid="stMetricLabel"] p { white-space: normal; }
     button[data-testid="stBaseButton-primary"],
     button[data-testid="stBaseButton-secondary"] {
         border-radius: 8px;
@@ -825,7 +835,12 @@ if st.session_state.record and st.session_state.record.opportunities:
     if abs(_delta) > 0.01:
         _delta_pct = (_delta / _original_total * 100) if _original_total else 0.0
         _delta_str = f"{_delta:+,.0f} ({_delta_pct:+.1f}%) vs. original"
-    st.sidebar.metric("Total value creation (base case)", f"${_current_total:,.0f}", delta=_delta_str)
+    st.sidebar.metric(
+        "Total value creation",
+        f"${_current_total:,.0f}",
+        delta=_delta_str,
+        help="Base case: sum of every opportunity's estimated_value.base.",
+    )
 
     if _record.transaction.deal_value:
         _econ = calculate_deal_economics(_current_total, _record.transaction.deal_value)
