@@ -91,7 +91,8 @@ page = st.sidebar.radio(
     "Workflow",
     [
         "1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan",
-        "5. Sensitivity", "6. Recommendation", "7. Evidence Trail",
+        "5. Risk Register", "6. Sensitivity", "7. Recommendation", "8. Executive Summary",
+        "9. Evidence Trail", "10. Tables",
     ],
 )
 
@@ -493,24 +494,6 @@ elif page == "4. 100-Day Plan":
             st.session_state.record = record
             save_analysis(record)
 
-    if record.risks:
-        st.subheader("Risk Register")
-        st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
-        ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
-        st.table(
-            [
-                {
-                    "Risk": r.title,
-                    "Category": r.category,
-                    "Likelihood": r.likelihood.value,
-                    "Impact": r.severity.value,
-                    "Score": r.score,
-                    "Mitigation": r.mitigation,
-                }
-                for r in ranked_risks
-            ]
-        )
-
     if record.integration_plan:
         st.subheader("Plan")
         for phase in ("0-30 days", "31-60 days", "61-100 days"):
@@ -520,30 +503,50 @@ elif page == "4. 100-Day Plan":
             st.markdown(f"**{phase}**")
             for a in actions:
                 st.markdown(f"- **{_md(a.title)}** ({a.owner_role}) — {_md(a.description)}")
+        if record.integration_plan.guiding_principles:
+            st.markdown("**Guiding principles**")
+            for principle in record.integration_plan.guiding_principles:
+                st.markdown(f"- {_md(principle)}")
+        st.caption(f"Governance: {_md(record.integration_plan.governance)}")
 
-    if record.review:
-        st.subheader("Reviewer Notes")
-        st.write("Status: " + ("✅ PASSED" if record.review.passed else "⚠️ ISSUES FOUND"))
-        if record.review.citation_coverage_pct is not None:
-            st.metric("Citation coverage", f"{record.review.citation_coverage_pct:.1f}%")
-        for issue in record.review.issues:
-            st.markdown(f"- **[{issue.severity.value}] {issue.stage} / {_md(issue.item_title)}** — {_md(issue.problem)}")
-
-    if record.executive_summary:
-        st.subheader("Executive Summary")
-        st.markdown(_md(record.executive_summary))
-
-    if record.executive_summary or record.integration_plan:
-        dl_cols = st.columns(2)
-        report_md = generate_report(record)
-        dl_cols[0].download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
-        report_pdf = generate_pdf(record)
-        dl_cols[1].download_button(
-            "Download full report (PDF)", report_pdf, file_name="deallens_report.pdf", mime="application/pdf"
-        )
+    st.caption(
+        "Risk Register, Executive Summary, and the full report download each moved to their "
+        "own page — see the sidebar."
+    )
 
 # ---------------------------------------------------------------- Page 5
-elif page == "5. Sensitivity":
+elif page == "5. Risk Register":
+    _require_record()
+    record = st.session_state.record
+    st.header("Risk Register")
+
+    if not record.risks:
+        st.warning("Run the 100-Day Plan generation step first to identify risks.")
+        st.stop()
+
+    st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
+    ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
+    st.table(
+        [
+            {
+                "Risk": r.title,
+                "Category": r.category,
+                "Likelihood": r.likelihood.value,
+                "Impact": r.severity.value,
+                "Score": r.score,
+                "Mitigation": r.mitigation,
+            }
+            for r in ranked_risks
+        ]
+    )
+
+    for r in ranked_risks:
+        if r.evidence:
+            with st.expander(f"Evidence: {r.title}"):
+                _evidence_lines(r.evidence)
+
+# ---------------------------------------------------------------- Page 6
+elif page == "6. Sensitivity":
     _require_record()
     record = st.session_state.record
     st.header("Sensitivity")
@@ -600,8 +603,8 @@ elif page == "5. Sensitivity":
             "live record, so it updates too."
         )
 
-# ---------------------------------------------------------------- Page 6
-elif page == "6. Recommendation":
+# ---------------------------------------------------------------- Page 7
+elif page == "7. Recommendation":
     _require_record()
     record = st.session_state.record
     st.header("Recommendation")
@@ -609,7 +612,7 @@ elif page == "6. Recommendation":
         "A rule-based verdict, not a model's opinion — every reason below traces to a specific "
         "reviewer finding or Red-Team challenge already in this analysis. Recomputed live from "
         "the current record, so it reflects any assumption you've adjusted on Independent "
-        "Assessments even if you haven't re-run the reviewer on 100-Day Plan."
+        "Assessments even if the Risk Register/Tables reviewer snapshot is stale."
     )
 
     if not record.agent_assessments:
@@ -645,8 +648,32 @@ elif page == "6. Recommendation":
         "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
     )
 
-# ---------------------------------------------------------------- Page 7
-elif page == "7. Evidence Trail":
+# ---------------------------------------------------------------- Page 8
+elif page == "8. Executive Summary":
+    _require_record()
+    record = st.session_state.record
+    st.header("Executive Summary")
+
+    if not record.executive_summary and not record.integration_plan:
+        st.warning("Run the 100-Day Plan generation step first to write the executive summary.")
+        st.stop()
+
+    if record.executive_summary:
+        st.markdown(_md(record.executive_summary))
+    else:
+        st.info("Executive summary not yet generated.")
+
+    st.divider()
+    dl_cols = st.columns(2)
+    report_md = generate_report(record)
+    dl_cols[0].download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
+    report_pdf = generate_pdf(record)
+    dl_cols[1].download_button(
+        "Download full report (PDF)", report_pdf, file_name="deallens_report.pdf", mime="application/pdf"
+    )
+
+# ---------------------------------------------------------------- Page 9
+elif page == "9. Evidence Trail":
     _require_record()
     record = st.session_state.record
     st.header("Evidence Trail")
@@ -692,6 +719,93 @@ elif page == "7. Evidence Trail":
                 f" — {description}",
                 unsafe_allow_html=True,
             )
+
+# ---------------------------------------------------------------- Page 10
+elif page == "10. Tables":
+    _require_record()
+    record = st.session_state.record
+    st.header("Tables")
+    st.caption("Every structured table in this analysis, in one place, for quick scanning.")
+
+    if record.acquirer_profile or record.target_profile:
+        st.subheader("Company Profiles")
+        rows = []
+        for metric, key, fmt in (
+            ("Revenue", "revenue", lambda v: f"${v:,.0f}"),
+            ("Growth", "revenue_growth_rate", lambda v: f"{v * 100:.1f}%"),
+            ("Operating margin", "operating_margin", lambda v: f"{v * 100:.1f}%"),
+            ("Employees", "employee_count", lambda v: f"{v:,}"),
+        ):
+            row = {"Metric": metric}
+            for label, profile in (("Acquirer", record.acquirer_profile), ("Target", record.target_profile)):
+                value = getattr(profile, key, None) if profile else None
+                row[label] = fmt(value) if value is not None else "n/a"
+            rows.append(row)
+        st.table(rows)
+
+    if record.financial_baselines:
+        st.subheader("Financial Baseline")
+        st.table(
+            [{"Metric": b.metric, "Value": f"{b.value:,.2f} {b.unit}", "Method": b.method} for b in record.financial_baselines]
+        )
+
+    if record.opportunities:
+        st.subheader("Opportunities")
+        opp_rows = []
+        for o in record.opportunities:
+            ramp = calculate_ramp_adjusted_value(o.estimated_value.base, o.year_1_pct, o.year_2_pct, o.year_3_pct, o.cost_to_achieve)
+            opp_rows.append({
+                "Opportunity": o.title,
+                "Category": o.category.value,
+                "Low": f"${o.estimated_value.low:,.0f}",
+                "Base": f"${o.estimated_value.base:,.0f}",
+                "High": f"${o.estimated_value.high:,.0f}",
+                "Difficulty": o.implementation_difficulty.value,
+                "Horizon": o.time_horizon,
+                "Cost to achieve": f"${o.cost_to_achieve:,.0f}",
+                "Net 3-yr value": f"${ramp['net_3yr_value']:,.0f}",
+            })
+        st.table(opp_rows)
+
+    if record.integration_plan and record.integration_plan.actions:
+        st.subheader("Integration Actions")
+        st.table(
+            [
+                {
+                    "Phase": a.phase,
+                    "Action": a.title,
+                    "Owner": a.owner_role,
+                    "Description": a.description,
+                    "Success metric": a.success_metric or "n/a",
+                }
+                for a in record.integration_plan.actions
+            ]
+        )
+
+    if record.review:
+        st.subheader("Reviewer Issues")
+        st.write("Status: " + ("PASSED" if record.review.passed else "ISSUES FOUND"))
+        if record.review.citation_coverage_pct is not None:
+            st.metric("Citation coverage", f"{record.review.citation_coverage_pct:.1f}%")
+        if record.review.issues:
+            st.table(
+                [
+                    {
+                        "Severity": i.severity.value,
+                        "Stage": i.stage,
+                        "Item": i.item_title,
+                        "Problem": i.problem,
+                        "Recommendation": i.recommendation,
+                    }
+                    for i in record.review.issues
+                ]
+            )
+        else:
+            st.caption("No issues flagged.")
+        st.caption(
+            "This reflects the reviewer snapshot from the last time 100-Day Plan generated it — "
+            "see Recommendation for a live-recomputed check against your current assumptions."
+        )
 
 # ---------------------------------------------------------------- Sidebar: live deal scorecard
 # Placed at the end of the script (not with the rest of the sidebar near the top) so it

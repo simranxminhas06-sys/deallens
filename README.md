@@ -298,16 +298,20 @@ streamlit run app.py
 
 That's enough to try **Demo mode** — no API key, no cost. In the sidebar,
 keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
-"Load demo case." Then browse **2. Evidence**, **3. Independent Assessments**
-(the debate transcript, with live sliders on each opportunity to drag its
-underlying assumptions and watch the estimate recompute), **4. 100-Day Plan**
-(risk register, plan, reviewer findings, executive summary, and a downloadable
-Markdown or PDF report), **5. Sensitivity** (a tornado chart plus a
-downside/upside scenario), **6. Recommendation** (the rule-based verdict), and
-**7. Evidence Trail** (every claim traced to its citation) — everything is
+"Load demo case." Then browse the rest of the workflow — everything is
 already populated, and the sidebar's "Live deal scorecard" tracks total value
 creation against the original case and the deal's purchase price as you
-adjust any slider.
+adjust any slider:
+
+- **2. Evidence** — company profiles and strategic rationale
+- **3. Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute
+- **4. 100-Day Plan** — the phased integration plan, guiding principles, and governance (click "Generate risk register, integration plan, and review" first; that one action populates this page plus Risk Register and Executive Summary)
+- **5. Risk Register** — sorted by likelihood × impact score
+- **6. Sensitivity** — a tornado chart plus a downside/upside scenario
+- **7. Recommendation** — the rule-based verdict
+- **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report
+- **9. Evidence Trail** — every claim traced to its citation
+- **10. Tables** — every structured table in the analysis (company profiles, financial baseline, opportunities, integration actions, reviewer issues) in one place
 
 For a **live run** against real OpenAI calls: switch the sidebar to "Live
 (OpenAI)", set `OPENAI_API_KEY` in your environment first —
@@ -321,10 +325,9 @@ streamlit run app.py
 — then work through the same pages: **1. Create Analysis** (keep the
 bundled sample documents checked, or upload your own) → **2. Evidence**
 (review extracted facts, approve assumptions) → **3. Independent Assessments**
-(run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
-plan, reviewer, executive summary, and download the report) → **5. Sensitivity**,
-**6. Recommendation**, and **7. Evidence Trail** (all live, no extra step needed
-once opportunities exist).
+(run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk
+register, plan, reviewer, and executive summary generation) → **5–10** (all
+live, no extra step needed once opportunities exist).
 
 Run tests any time (no API key needed) with `pytest`.
 
