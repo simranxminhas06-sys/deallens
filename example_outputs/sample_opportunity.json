@@ -1,0 +1,35 @@
+{
+  "title": "Consolidate overlapping distribution and cold-chain logistics",
+  "category": "cost_synergy",
+  "rationale": "Both companies operate independent perishables distribution networks in overlapping metro markets; combining cold-chain routing and warehouse capacity reduces duplicated fixed costs.",
+  "evidence": [
+    {
+      "claim": "Whole Foods operates approximately 431 stores concentrated in affluent urban and suburban U.S. markets.",
+      "claim_type": "documented_fact",
+      "citations": [
+        {
+          "source_document": "target_whole_foods_overview.md",
+          "location": "Section 2: Financial Highlights",
+          "quoted_text": "approximately 431 stores at fiscal year-end"
+        }
+      ]
+    }
+  ],
+  "estimated_value": {
+    "low": 2000000,
+    "base": 3500000,
+    "high": 5000000,
+    "currency": "USD"
+  },
+  "assumptions": [
+    "Combined distribution facility costs can be reduced by 10-20% within 18 months",
+    "No store closures required to realize the saving"
+  ],
+  "implementation_difficulty": "medium",
+  "time_horizon": "12-18 months",
+  "key_risks": [
+    "Perishables service-level disruption during warehouse consolidation",
+    "Union or labor-relations friction at affected distribution sites"
+  ],
+  "calculation_method": "calculate_savings_scenario"
+}
