@@ -1,7 +1,7 @@
 """No-API-key demo/test mode.
 
-Runs the full DealRoom AI pipeline — company profiles, three-agent war room
-debate, risk register, 100-day plan, and reviewer — using hand-authored
+Runs the full DealRoom AI pipeline — company profiles, three-agent independent
+assessments, risk register, 100-day plan, and reviewer — using hand-authored
 fixture data for the Amazon/Whole Foods case instead of live OpenAI calls.
 
 Every dollar figure below is still produced by the real financial_calculator

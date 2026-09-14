@@ -36,7 +36,7 @@ def _position_statement(
         input=(
             f"Baseline metrics for {acquirer_name} / {target_name}:\n{baseline_text}\n\n"
             f"Opportunities generated:\n{opp_text}\n\n"
-            "Write your one-paragraph position for the war room transcript. Call out specifically "
+            "Write your one-paragraph position for the assessment transcript. Call out specifically "
             "which estimate(s), if any, rest on the weakest evidence."
         ),
     )

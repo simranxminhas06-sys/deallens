@@ -40,7 +40,7 @@ if not is_demo and not os.environ.get("OPENAI_API_KEY"):
 
 page = st.sidebar.radio(
     "Workflow",
-    ["1. Create Analysis", "2. Evidence", "3. Agent War Room", "4. 100-Day Plan"],
+    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan"],
 )
 
 with st.sidebar.expander("Saved analyses"):
@@ -63,8 +63,12 @@ def _md(text: str) -> str:
 
 def _evidence_lines(evidence) -> None:
     for e in evidence:
-        cites = "; ".join(f"{c.source_document} ({c.location})" for c in e.citations) or "no citation"
-        st.markdown(f"- **[{e.claim_type.value}]** {_md(e.claim)}  \n  _{_md(cites)}_")
+        cite_strs = [
+            f"[{_md(c.source_document)}]({c.source_url})" if c.source_url else f"{_md(c.source_document)} ({c.location})"
+            for c in e.citations
+        ]
+        cites = "; ".join(cite_strs) or "no citation"
+        st.markdown(f"- **[{e.claim_type.value}]** {_md(e.claim)}  \n  _{cites}_")
 
 
 ROLE_LABEL = {AgentRole.STRATEGY: "Strategy Agent", AgentRole.FINANCIAL: "Financial Agent", AgentRole.RED_TEAM: "Red-Team Agent"}
@@ -76,7 +80,7 @@ if page == "1. Create Analysis":
     if is_demo:
         st.info(
             "Demo mode runs the full pipeline — company profiles, the Strategy/Financial/Red-Team "
-            "war room debate, risk register, 100-day plan, and reviewer — against a hand-authored "
+            "independent assessments, risk register, 100-day plan, and reviewer — against a hand-authored "
             "Amazon/Whole Foods fixture. No OpenAI calls, no cost. See agent/demo_fixtures.py."
         )
         if st.button("Load demo case (Amazon acquires Whole Foods)", type="primary"):
@@ -88,7 +92,7 @@ if page == "1. Create Analysis":
             st.session_state.document_names = DEMO_DOCUMENT_NAMES
             st.session_state.vector_store_id = None
             save_analysis(record)
-            st.success("Demo analysis loaded. Continue on Evidence, Agent War Room, or 100-Day Plan.")
+            st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or 100-Day Plan.")
     else:
         col1, col2 = st.columns(2)
         acquirer_name = col1.text_input("Acquiring company", value="Amazon.com, Inc.")
@@ -102,12 +106,21 @@ if page == "1. Create Analysis":
             value="Assume no material regulatory divestitures required.",
         )
 
-        st.subheader("Upload documents")
+        st.subheader("Upload documents (optional if web search is enabled below)")
         default_dir = Path("sample_data")
         use_sample = st.checkbox("Use bundled Amazon / Whole Foods sample documents", value=True)
         uploaded_files = st.file_uploader(
             "Annual reports, investor presentations, financial statements (PDF or text)",
             accept_multiple_files=True,
+        )
+        enable_web_search = st.checkbox(
+            "Also use live web search for public company background",
+            value=False,
+            help="Lets the Researcher pull public facts (business description, filings, segment "
+            "detail) straight from the web, so you don't have to re-upload the same background "
+            "documents for every analysis. Deal-specific evidence (financials used in scenario "
+            "math) still requires uploaded documents — Independent Assessments and the 100-Day "
+            "Plan need an uploaded document set to run.",
         )
 
         if st.button("Ingest documents & run research stage", type="primary"):
@@ -126,26 +139,28 @@ if page == "1. Create Analysis":
                     file_paths.append(str(dest))
                     document_names.add(f.name)
 
-            if not file_paths:
-                st.error("Upload at least one document or keep the sample documents enabled.")
+            if not file_paths and not enable_web_search:
+                st.error("Upload at least one document, keep the sample documents enabled, or enable web search.")
             else:
-                with st.spinner("Uploading documents and scoping available information..."):
-                    vector_store_id, summary = orchestrator.ingest_documents(file_paths)
-                    transaction = TransactionAssumptions(
-                        acquirer_name=acquirer_name,
-                        target_name=target_name,
-                        announcement_date=announcement_date or None,
-                        deal_value=deal_value or None,
-                        deal_structure=deal_structure or None,
-                        user_notes=user_notes or None,
-                    )
-                    record = orchestrator.start_analysis(transaction)
+                vector_store_id, summary = None, None
+                if file_paths:
+                    with st.spinner("Uploading documents and scoping available information..."):
+                        vector_store_id, summary = orchestrator.ingest_documents(file_paths)
+                transaction = TransactionAssumptions(
+                    acquirer_name=acquirer_name,
+                    target_name=target_name,
+                    announcement_date=announcement_date or None,
+                    deal_value=deal_value or None,
+                    deal_structure=deal_structure or None,
+                    user_notes=user_notes or None,
+                )
+                record = orchestrator.start_analysis(transaction)
                 st.session_state.vector_store_id = vector_store_id
                 st.session_state.document_names = document_names
                 st.session_state.availability_summary = summary
 
                 with st.spinner("Researcher extracting company profiles and strategic rationale..."):
-                    record = orchestrator.run_research_stage(record, vector_store_id)
+                    record = orchestrator.run_research_stage(record, vector_store_id, enable_web_search)
                 st.session_state.record = record
                 save_analysis(record)
                 st.success("Research stage complete. Continue on the Evidence page.")
@@ -181,8 +196,8 @@ elif page == "2. Evidence":
     st.subheader("Approve assumptions")
     st.write(
         "Confirm the transaction assumptions below before the agents run financial scenario "
-        "analysis. Financial estimates in the war room will use these figures and the documents "
-        "ingested above."
+        "analysis. Financial estimates in the independent assessments below will use these figures "
+        "and the documents ingested above."
     )
     st.json(record.transaction.model_dump())
     approved = st.checkbox("I approve these assumptions for scenario analysis", value=record.assumptions_approved)
@@ -192,20 +207,20 @@ elif page == "2. Evidence":
         st.session_state.record = record
 
 # ---------------------------------------------------------------- Page 3
-elif page == "3. Agent War Room":
+elif page == "3. Independent Assessments":
     _require_record()
     record = st.session_state.record
-    st.header("Agent War Room")
+    st.header("Independent Assessments")
     st.caption("Strategy, Financial, and Red-Team agents assess the deal independently, then Red-Team challenges the other two.")
 
     if not record.assumptions_approved:
-        st.warning("Approve assumptions on the Evidence page before running the war room.")
+        st.warning("Approve assumptions on the Evidence page before running the assessments.")
         st.stop()
 
     if not record.agent_assessments and st.session_state.vector_store_id:
-        if st.button("Run war room (Strategy → Financial → Red-Team)", type="primary"):
+        if st.button("Run independent assessments (Strategy → Financial → Red-Team)", type="primary"):
             with st.spinner("Agents assessing the deal..."):
-                record, tool_call_log = orchestrator.run_war_room_stage(record, st.session_state.vector_store_id)
+                record, tool_call_log = orchestrator.run_assessment_stage(record, st.session_state.vector_store_id)
             st.session_state.tool_call_log = tool_call_log
             st.session_state.record = record
             save_analysis(record)
@@ -224,7 +239,7 @@ elif page == "3. Agent War Room":
             if assessment.challenges:
                 for c in assessment.challenges:
                     st.markdown(
-                        f"> ⚔️ challenging **{ROLE_LABEL.get(c.target_agent, c.target_agent.value)}** "
+                        f"> **Challenge to {ROLE_LABEL.get(c.target_agent, c.target_agent.value)}** "
                         f"on *“{_md(c.target_claim)}”* [{c.severity.value}]: {_md(c.critique)}"
                     )
 
@@ -240,7 +255,7 @@ elif page == "4. 100-Day Plan":
     st.header("100-Day Integration Plan")
 
     if not record.opportunities:
-        st.warning("Run the Agent War Room first to generate opportunities.")
+        st.warning("Run Independent Assessments first to generate opportunities.")
         st.stop()
 
     if not record.integration_plan and st.session_state.vector_store_id:

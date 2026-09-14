@@ -21,7 +21,7 @@ def test_demo_pipeline_produces_complete_record():
     assert record.assumptions_approved is True
 
 
-def test_demo_pipeline_has_all_three_war_room_agents():
+def test_demo_pipeline_has_all_three_assessment_agents():
     record, _ = run_demo_pipeline()
     roles = {a.role for a in record.agent_assessments}
     assert roles == {AgentRole.STRATEGY, AgentRole.FINANCIAL, AgentRole.RED_TEAM}

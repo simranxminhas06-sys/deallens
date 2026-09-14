@@ -40,8 +40,11 @@ class AgentRole(str, Enum):
 
 
 class Citation(BaseModel):
-    source_document: str = Field(description="File name of the source document")
-    location: str = Field(description="Page, section, or table reference within the document")
+    source_document: str = Field(description="File name of the source document, or the page title for a web source")
+    location: str = Field(description="Page, section, or table reference within the document; 'web' for a web source")
+    source_url: Optional[str] = Field(
+        default=None, description="URL, if this citation came from web search rather than an uploaded document"
+    )
     quoted_text: Optional[str] = Field(
         default=None, description="Short (<25 word) supporting excerpt, if directly quoted"
     )

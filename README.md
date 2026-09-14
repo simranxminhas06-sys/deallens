@@ -15,10 +15,12 @@ re-checks citations and calculations rather than trusting the agents' own
 self-report.
 
 **Try it with no API key and no cost**: pick "Demo (no API key)" in the
-sidebar and click "Load demo case" — it runs the full pipeline, war-room
-debate included, against a hand-authored Amazon/Whole Foods fixture
+sidebar and click "Load demo case" — it runs the full pipeline, independent
+assessments included, against a hand-authored Amazon/Whole Foods fixture
 (`agent/demo_fixtures.py`). "Live (OpenAI)" mode runs the same pipeline for
-real against uploaded documents.
+real against uploaded documents, optionally supplemented by live web search
+for public company background (see "Researching without uploaded documents"
+below).
 
 Demo case: **Amazon's 2017 acquisition of Whole Foods Market**, using simplified
 synthetic documents in [`sample_data/`](sample_data/) (not the real filings — see
@@ -38,12 +40,12 @@ exactly what to diligence further.
 
 ## What the agent does
 
-Given an acquirer name, a target name, and uploaded documents (plus optional
-transaction assumptions), it produces:
+Given an acquirer name, a target name, and either uploaded documents or live
+web search (plus optional transaction assumptions), it produces:
 
 1. Company profiles (business description, financials, segments)
 2. Strategic rationale for the acquisition
-3. A three-agent war-room debate: Strategy's case, Financial's numbers, Red-Team's challenges to both
+3. A three-agent independent assessment: Strategy's case, Financial's numbers, Red-Team's challenges to both
 4. Revenue and cost-saving opportunities (from the Financial Agent, with low/base/high scenarios)
 5. Operational and organizational risks
 6. A 100-day integration plan
@@ -55,15 +57,15 @@ The pipeline is a sequence of discrete stages, each callable independently from
 the Streamlit app — not a black-box multi-agent loop:
 
 ```
-User uploads documents
+User uploads documents and/or enables live web search
         |
-Agent identifies available information       (agent/researcher.py)
+Agent identifies available information (documents only)  (agent/researcher.py)
         |
-Document Researcher extracts profiles + rationale, with citations
+Researcher extracts profiles + rationale, with citations
         |
 [ USER APPROVES ASSUMPTIONS ]                 (gate before any financial scenario math)
         |
-AGENT WAR ROOM:
+INDEPENDENT ASSESSMENTS:
   Strategy Agent assesses the rationale        (agent/strategy_agent.py)
   Financial Agent computes baselines + opportunities with financial_calculator (agent/financial_agent.py)
   Red-Team Agent challenges both by name, citing evidence gaps  (agent/red_team_agent.py)
@@ -77,11 +79,37 @@ Final report generated with executive summary  (tools/report_generator.py)
 
 `agent/orchestrator.py` wires these together; each function takes and returns
 an `AnalysisRecord`, so the Streamlit app can run one stage, show its output,
-and let the user proceed (or stop) before the next. The three war-room agents
-are separate Responses API calls with separate instructions/roles — deliberately
+and let the user proceed (or stop) before the next. The three assessment
+agents are separate Responses API calls with separate instructions/roles — deliberately
 built on the same primitives as the rest of the pipeline (structured outputs +
 function calling + file_search) rather than a separate agent framework, so the
 whole system stays in one mental model.
+
+## Researching without uploaded documents
+
+Re-uploading the same background documents for every analysis gets old fast,
+so the Create Analysis page has an "Also use live web search for public
+company background" option (`{"type": "web_search"}` on the Responses API,
+wired up in `agent/researcher.py` / `agent/llm.py`). It applies only to
+company profiles and strategic rationale — the two research-stage outputs
+that are naturally public information:
+
+- With it on and documents uploaded, the Researcher draws on both, preferring
+  the uploaded documents when they cover the same fact.
+- With it on and no documents uploaded, company profiles and strategic
+  rationale run entirely from the web — no upload required.
+- Citations from the web carry a `source_url` (rendered as a link on the
+  Evidence page) instead of a document name + page reference.
+
+Deal-specific evidence stays document-only by design: the Financial Agent's
+opportunities and the reviewer's document-grounding check
+(`agent/reviewer.py::_check_document_grounding`) both require an uploaded
+document set, so Independent Assessments and the 100-Day Plan still need
+`vector_store_id` set — i.e., at least one uploaded document — even when web
+search is enabled. This keeps financial claims traceable to something the
+user actually supplied, in line with the project's evidence-discipline rules,
+while removing the busywork from the parts of the analysis that are just
+public company background.
 
 ## Tools the agent can call
 
@@ -117,11 +145,11 @@ Every extracted fact and every proposed opportunity is a Pydantic model
 `calculation_method` — see [`example_outputs/sample_opportunity.json`](example_outputs/sample_opportunity.json)
 for the full shape.
 
-## The agent war room
+## Independent assessments
 
 Rather than one agent producing one blended narrative, three agents assess
-the deal independently and then argue about it — this is the "memorable
-feature" of the product, and it's a real structural choice, not UI dressing:
+the deal independently and then argue about it — this is the defining
+structural choice of the product, not UI dressing:
 
 - `agent/strategy_agent.py` — market attractiveness, whether the stated rationale holds up, growth case, competitive comparison
 - `agent/financial_agent.py` — wraps `agent/value_creation.py`'s baseline + opportunity generation, then writes a position paragraph that names its own weakest estimate
@@ -130,7 +158,7 @@ feature" of the product, and it's a real structural choice, not UI dressing:
 Each `AgentAssessment` (`schemas/analysis_models.py`) carries a one-paragraph
 `position` (the debate line you see in the UI), cited `key_findings`, and
 either `opportunities` (Financial) or `challenges` (Red-Team). The Streamlit
-"Agent War Room" page renders these as a chat transcript.
+"Independent Assessments" page renders these as a chat transcript.
 
 ## The reviewer stage
 
@@ -217,8 +245,8 @@ streamlit run app.py
 
 That's enough to try **Demo mode** — no API key, no cost. In the sidebar,
 keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
-"Load demo case." Then browse **2. Evidence**, **3. Agent War Room** (the
-debate transcript), and **4. 100-Day Plan** (risk register, plan, reviewer
+"Load demo case." Then browse **2. Evidence**, **3. Independent Assessments**
+(the debate transcript), and **4. 100-Day Plan** (risk register, plan, reviewer
 findings, executive summary, and a downloadable report) — everything is
 already populated.
 
@@ -233,8 +261,8 @@ streamlit run app.py
 
 — then work through the same four pages: **1. Create Analysis** (keep the
 bundled sample documents checked, or upload your own) → **2. Evidence**
-(review extracted facts, approve assumptions) → **3. Agent War Room** (run
-Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
+(review extracted facts, approve assumptions) → **3. Independent Assessments**
+(run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
 plan, reviewer, executive summary, and download the report).
 
 Run tests any time (no API key needed) with `pytest`.
@@ -243,7 +271,7 @@ Run tests any time (no API key needed) with `pytest`.
 
 Staged so each piece is working before the next is added:
 
-1. ✅ Strategy, Financial, and Red-Team agents debating in the War Room, with a no-API-key demo mode (this version).
+1. ✅ Strategy, Financial, and Red-Team agents debating in Independent Assessments, with a no-API-key demo mode (this version).
 2. **Investment Committee Agent** — reviews the three assessments, explains where they disagree, and issues a Proceed / Proceed with conditions / Further diligence / Do not proceed verdict.
 3. **Interactive scenario simulator** — sliders for purchase price, growth/synergy assumptions, implementation cost, time-to-synergy, and churn, that re-run the Financial and Red-Team agents against the changed inputs.
 4. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).

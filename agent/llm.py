@@ -41,15 +41,22 @@ def run_structured(
     input_text: str,
     text_format: Type[T],
     vector_store_id: str | None = None,
+    enable_web_search: bool = False,
 ) -> T:
-    """Single-shot call that returns a validated Pydantic object, optionally grounded in file_search."""
+    """Single-shot call that returns a validated Pydantic object, optionally grounded in
+    file_search (uploaded documents) and/or web_search (public information).
+    """
     client = get_client()
-    tools = [{"type": "file_search", "vector_store_ids": [vector_store_id]}] if vector_store_id else None
+    tools = []
+    if vector_store_id:
+        tools.append({"type": "file_search", "vector_store_ids": [vector_store_id]})
+    if enable_web_search:
+        tools.append({"type": "web_search"})
     response = client.responses.parse(
         model=MODEL,
         instructions=instructions,
         input=input_text,
-        tools=tools,
+        tools=tools or None,
         text_format=text_format,
     )
     return response.output_parsed

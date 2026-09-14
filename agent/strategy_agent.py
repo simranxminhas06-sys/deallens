@@ -2,7 +2,7 @@
 
 Assesses market attractiveness, growth opportunities, and competitive
 positioning — deliberately independent of the Financial Agent so the two can
-disagree in the war room rather than sharing one blended narrative.
+disagree independently rather than sharing one blended narrative.
 """
 
 from __future__ import annotations

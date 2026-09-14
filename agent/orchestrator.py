@@ -22,22 +22,28 @@ def start_analysis(transaction: TransactionAssumptions) -> AnalysisRecord:
     return AnalysisRecord(transaction=transaction)
 
 
-def run_research_stage(record: AnalysisRecord, vector_store_id: str) -> AnalysisRecord:
+def run_research_stage(
+    record: AnalysisRecord, vector_store_id: str | None = None, enable_web_search: bool = False
+) -> AnalysisRecord:
+    """vector_store_id may be None if the user chose to research via web_search only —
+    see the "Also use live web search" option on the Create Analysis page.
+    """
     record.acquirer_profile = researcher.extract_company_profile(
-        record.transaction.acquirer_name, "acquirer", vector_store_id
+        record.transaction.acquirer_name, "acquirer", vector_store_id, enable_web_search
     )
     record.target_profile = researcher.extract_company_profile(
-        record.transaction.target_name, "target", vector_store_id
+        record.transaction.target_name, "target", vector_store_id, enable_web_search
     )
     record.strategic_rationale = researcher.extract_strategic_rationale(
-        record.transaction.acquirer_name, record.transaction.target_name, vector_store_id
+        record.transaction.acquirer_name, record.transaction.target_name, vector_store_id, enable_web_search
     )
     return record
 
 
-def run_war_room_stage(record: AnalysisRecord, vector_store_id: str) -> tuple[AnalysisRecord, list[dict]]:
+def run_assessment_stage(record: AnalysisRecord, vector_store_id: str) -> tuple[AnalysisRecord, list[dict]]:
     """Strategy, Financial, and Red-Team agents assess the deal independently, then the
-    Red-Team agent challenges the other two — this is the debate shown on the War Room page.
+    Red-Team agent challenges the other two — this is the debate shown on the Independent
+    Assessments page.
     """
     if not record.assumptions_approved:
         raise ValueError("Assumptions must be approved before running financial scenario analysis.")

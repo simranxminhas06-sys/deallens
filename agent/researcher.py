@@ -9,11 +9,13 @@ from __future__ import annotations
 from agent.llm import get_client, run_structured
 from schemas.analysis_models import CompanyProfile, StrategicRationale
 
-RESEARCHER_INSTRUCTIONS = """You are a due-diligence document researcher for an M&A analysis tool.
-You only state facts that are directly supported by the uploaded documents via file_search.
-Every fact you report must carry a citation with the source document name and a page/section
-reference. If a figure or claim is not in the documents, do not invent it — omit it or mark it
-as unavailable. Never mix assumptions into fields meant for documented facts."""
+RESEARCHER_INSTRUCTIONS = """You are a due-diligence researcher for an M&A analysis tool. You only
+state facts that are directly supported by an available tool: uploaded documents via file_search,
+or public sources via web_search. Every fact you report must carry a citation. For a document
+citation, give the source document name and a page/section reference. For a web citation, give the
+page title as source_document, its URL as source_url, and set location to "web". If a figure or
+claim is not directly supported by a document or a web source, do not invent it — omit it or mark
+it as unavailable. Never mix assumptions into fields meant for documented facts."""
 
 
 def identify_available_information(vector_store_id: str) -> str:
@@ -32,23 +34,49 @@ def identify_available_information(vector_store_id: str) -> str:
     return response.output_text
 
 
-def extract_company_profile(company_name: str, role: str, vector_store_id: str) -> CompanyProfile:
+def extract_company_profile(
+    company_name: str,
+    role: str,
+    vector_store_id: str | None = None,
+    enable_web_search: bool = False,
+) -> CompanyProfile:
+    source_note = (
+        "Use the uploaded documents and public web sources, preferring the uploaded documents "
+        "when both cover the same fact."
+        if vector_store_id and enable_web_search
+        else "Use the uploaded documents."
+        if vector_store_id
+        else "Use public web sources."
+    )
     prompt = (
         f"Build a company profile for {company_name}, which is the {role} in this transaction. "
         "Extract business description, most recent fiscal year revenue, revenue growth rate, "
-        "operating margin, employee count, and key business segments, wherever the documents "
-        "support them. Attach an EvidenceItem with citations for every populated financial field."
+        f"operating margin, employee count, and key business segments, wherever available. {source_note} "
+        "Attach an EvidenceItem with citations for every populated financial field."
     )
-    return run_structured(RESEARCHER_INSTRUCTIONS, prompt, CompanyProfile, vector_store_id)
+    return run_structured(RESEARCHER_INSTRUCTIONS, prompt, CompanyProfile, vector_store_id, enable_web_search)
 
 
-def extract_strategic_rationale(acquirer_name: str, target_name: str, vector_store_id: str) -> StrategicRationale:
+def extract_strategic_rationale(
+    acquirer_name: str,
+    target_name: str,
+    vector_store_id: str | None = None,
+    enable_web_search: bool = False,
+) -> StrategicRationale:
+    source_note = (
+        "Use the uploaded documents and public web sources, preferring the uploaded documents "
+        "when both cover the same point."
+        if vector_store_id and enable_web_search
+        else "Use the uploaded documents."
+        if vector_store_id
+        else "Use public web sources."
+    )
     prompt = (
-        f"Based on the uploaded documents, explain the strategic rationale for {acquirer_name} "
-        f"acquiring {target_name}: what capability, market, or asset gap this closes, and why now. "
-        "Support each point with an EvidenceItem citing the source document."
+        f"Explain the strategic rationale for {acquirer_name} acquiring {target_name}: what "
+        f"capability, market, or asset gap this closes, and why now. {source_note} Support each "
+        "point with an EvidenceItem citing the source."
     )
-    return run_structured(RESEARCHER_INSTRUCTIONS, prompt, StrategicRationale, vector_store_id)
+    return run_structured(RESEARCHER_INSTRUCTIONS, prompt, StrategicRationale, vector_store_id, enable_web_search)
 
 
 def search_uploaded_documents(query: str, vector_store_id: str, max_results: int = 5) -> dict:
