@@ -293,9 +293,10 @@ keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
 (the debate transcript, with live sliders on each opportunity to drag its
 underlying assumptions and watch the estimate recompute), **4. 100-Day Plan**
 (risk register, plan, reviewer findings, executive summary, and a downloadable
-report), **5. Sensitivity** (a tornado chart plus a downside/upside scenario),
-and **6. Recommendation** (the rule-based verdict) — everything is already
-populated, and the sidebar's "Live deal scorecard" tracks total value
+Markdown or PDF report), **5. Sensitivity** (a tornado chart plus a
+downside/upside scenario), **6. Recommendation** (the rule-based verdict), and
+**7. Evidence Trail** (every claim traced to its citation) — everything is
+already populated, and the sidebar's "Live deal scorecard" tracks total value
 creation against the original case and the deal's purchase price as you
 adjust any slider.
 
@@ -312,8 +313,9 @@ streamlit run app.py
 bundled sample documents checked, or upload your own) → **2. Evidence**
 (review extracted facts, approve assumptions) → **3. Independent Assessments**
 (run Strategy → Financial → Red-Team) → **4. 100-Day Plan** (run risk register,
-plan, reviewer, executive summary, and download the report) → **5. Sensitivity**
-and **6. Recommendation** (both live, no extra step needed once opportunities exist).
+plan, reviewer, executive summary, and download the report) → **5. Sensitivity**,
+**6. Recommendation**, and **7. Evidence Trail** (all live, no extra step needed
+once opportunities exist).
 
 Run tests any time (no API key needed) with `pytest`.
 
@@ -327,9 +329,10 @@ Staged so each piece is working before the next is added:
 4. ✅ **Investment Committee verdict** — a rule-based Proceed / Proceed with conditions / Further diligence / Do not proceed verdict on its own Recommendation page, built entirely from the reviewer's findings and Red-Team's challenges (`agent/verdict.py`, this version — deliberately not an LLM call rendering an opinion, so it's free and works in Demo mode).
 5. ✅ **Deal economics and synergy ramp/cost-to-achieve** — value creation is compared against the deal's purchase price (captured on Create Analysis but previously unused anywhere in the pipeline), and each opportunity phases in over a 3-year ramp net of a one-time cost to achieve, instead of a single undiscounted run-rate number (this version).
 6. ✅ **Risk likelihood x impact scoring** — the risk register is a composite 1-9 score (likelihood x impact), sorted highest first, instead of a single severity label (this version).
-7. **Evidence graph** — a clickable Recommendation → Claim → Calculation/Assumption → Source-document-and-page view (the data already exists in `EvidenceItem`/`Citation`; this is a UI addition).
-8. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-9. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+7. ✅ **Evidence Trail** — pick any claim-bearing item (a profile, the rationale, an opportunity, a risk, an agent's key findings) and see each underlying claim, color-coded by claim type, with the exact citation it rests on or a note that it has none (this version).
+8. ✅ **PDF report export** — a formatted PDF (`tools/pdf_generator.py`, pure Python via reportlab, no system-binary dependency) alongside the existing Markdown download, with the same Recommendation/Deal Economics/ramp sections (this version).
+9. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+10. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

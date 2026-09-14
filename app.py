@@ -8,6 +8,7 @@ real Responses API pipeline stage by stage.
 
 from __future__ import annotations
 
+import html
 import os
 import tempfile
 from pathlib import Path
@@ -25,6 +26,7 @@ from agent.verdict import compute_verdict
 from db.database import list_analyses, load_analysis, save_analysis
 from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions, VerdictLevel
 from tools.financial_calculator import TOOL_FUNCTIONS, calculate_deal_economics, calculate_ramp_adjusted_value
+from tools.pdf_generator import generate_pdf
 from tools.report_generator import generate_report
 
 st.set_page_config(page_title="DealLens", layout="wide")
@@ -46,7 +48,10 @@ if not is_demo and not os.environ.get("OPENAI_API_KEY"):
 
 page = st.sidebar.radio(
     "Workflow",
-    ["1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan", "5. Sensitivity", "6. Recommendation"],
+    [
+        "1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. 100-Day Plan",
+        "5. Sensitivity", "6. Recommendation", "7. Evidence Trail",
+    ],
 )
 
 with st.sidebar.expander("Saved analyses"):
@@ -75,6 +80,44 @@ def _evidence_lines(evidence) -> None:
         ]
         cites = "; ".join(cite_strs) or "no citation"
         st.markdown(f"- **[{e.claim_type.value}]** {_md(e.claim)}  \n  _{cites}_")
+
+
+CLAIM_TYPE_COLOR = {
+    "documented_fact": "#1B7A3D",
+    "calculated_result": "#1565C0",
+    "assumption": "#B5670A",
+    "hypothesis": "#6B6B6B",
+}
+
+
+def _render_evidence_trail(evidence) -> None:
+    """Renders each EvidenceItem as a claim -> citation card, color-coded by claim_type.
+    Evidence text ultimately comes from uploaded documents or web search — untrusted content
+    — so it's HTML-escaped before going into unsafe_allow_html, not just '$'-escaped.
+    """
+    if not evidence:
+        st.caption("No evidence recorded for this item.")
+        return
+    for e in evidence:
+        color = CLAIM_TYPE_COLOR.get(e.claim_type.value, "#6B6B6B")
+        cite_html = "; ".join(
+            f'<a href="{html.escape(c.source_url)}">{html.escape(c.source_document)}</a>'
+            if c.source_url
+            else f"{html.escape(c.source_document)} ({html.escape(c.location)})"
+            for c in e.citations
+        ) or "no citation"
+        notes_html = f'<div style="margin-top:4px;color:#888;font-size:0.85em;">Note: {html.escape(e.notes)}</div>' if e.notes else ""
+        st.markdown(
+            f'<div style="border-left:4px solid {color};padding:8px 0 8px 12px;margin-bottom:10px;">'
+            f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;'
+            f'font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;">'
+            f"{html.escape(e.claim_type.value.replace('_', ' '))}</span>"
+            f'<div style="margin-top:6px;">{html.escape(e.claim)}</div>'
+            f'<div style="margin-top:4px;color:#888;font-size:0.85em;">→ {cite_html}</div>'
+            f"{notes_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def _pretty_param_label(param: str) -> str:
@@ -442,8 +485,13 @@ elif page == "4. 100-Day Plan":
         st.markdown(_md(record.executive_summary))
 
     if record.executive_summary or record.integration_plan:
+        dl_cols = st.columns(2)
         report_md = generate_report(record)
-        st.download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
+        dl_cols[0].download_button("Download full report (Markdown)", report_md, file_name="deallens_report.md")
+        report_pdf = generate_pdf(record)
+        dl_cols[1].download_button(
+            "Download full report (PDF)", report_pdf, file_name="deallens_report.pdf", mime="application/pdf"
+        )
 
 # ---------------------------------------------------------------- Page 5
 elif page == "5. Sensitivity":
@@ -547,6 +595,54 @@ elif page == "6. Recommendation":
         "coverage under 70%, → further diligence. A clean review with a high-severity Red-Team "
         "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
     )
+
+# ---------------------------------------------------------------- Page 7
+elif page == "7. Evidence Trail":
+    _require_record()
+    record = st.session_state.record
+    st.header("Evidence Trail")
+    st.caption(
+        "Every claim traced to its source. Pick an item below to see each underlying claim, "
+        "color-coded by type, with the citation it rests on — or a note that it has none."
+    )
+
+    sources: dict = {}
+    if record.acquirer_profile:
+        sources[f"Acquirer profile: {record.acquirer_profile.company_name}"] = record.acquirer_profile.evidence
+    if record.target_profile:
+        sources[f"Target profile: {record.target_profile.company_name}"] = record.target_profile.evidence
+    if record.strategic_rationale:
+        sources["Strategic rationale"] = record.strategic_rationale.supporting_points
+    for o in record.opportunities:
+        sources[f"Opportunity: {o.title}"] = o.evidence
+    for r in record.risks:
+        sources[f"Risk: {r.title}"] = r.evidence
+    for a in record.agent_assessments:
+        if a.key_findings:
+            sources[f"{ROLE_LABEL.get(a.role, a.role.value)}: key findings"] = a.key_findings
+
+    if not sources:
+        st.warning("No evidence recorded yet — start on Create Analysis and Evidence.")
+        st.stop()
+
+    selected = st.selectbox("Trace an item", list(sources.keys()))
+    _render_evidence_trail(sources[selected])
+
+    with st.expander("Claim type legend"):
+        legend = [
+            ("documented_fact", "directly supported by a citation"),
+            ("calculated_result", "produced by a financial_calculator tool call"),
+            ("assumption", "explicitly stated, not sourced from a document"),
+            ("hypothesis", "requires further diligence — no citation or calculation yet"),
+        ]
+        for claim_type, description in legend:
+            color = CLAIM_TYPE_COLOR[claim_type]
+            st.markdown(
+                f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;'
+                f'font-size:0.72em;font-weight:600;text-transform:uppercase;">{claim_type.replace("_", " ")}</span>'
+                f" — {description}",
+                unsafe_allow_html=True,
+            )
 
 # ---------------------------------------------------------------- Sidebar: live deal scorecard
 # Placed at the end of the script (not with the rest of the sidebar near the top) so it
