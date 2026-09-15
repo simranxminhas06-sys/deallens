@@ -18,8 +18,7 @@ import pandas as pd
 import streamlit as st
 
 from agent import orchestrator
-from agent.demo_fixtures import DOCUMENT_NAMES as DEMO_DOCUMENT_NAMES
-from agent.demo_fixtures import run_demo_pipeline
+from agent.demo_fixtures import DEMO_CASES
 from agent.reviewer import review_analysis
 from agent.sensitivity import compute_scenario_total, compute_tornado_rows
 from agent.verdict import compute_verdict
@@ -400,18 +399,19 @@ def page_create_analysis():
         st.info(
             "Demo mode runs the full pipeline — company profiles, the Strategy/Financial/Red-Team "
             "independent assessments, risk register, 100-day plan, and reviewer — against a hand-authored "
-            "Amazon/Whole Foods fixture. No OpenAI calls, no cost. See agent/demo_fixtures.py."
+            "fixture. No OpenAI calls, no cost. See agent/demo_fixtures.py."
         )
-        if st.button("Load demo case (Amazon acquires Whole Foods)", type="primary"):
-            with st.spinner("Running demo pipeline..."):
-                record, tool_call_log = run_demo_pipeline()
-                record = orchestrator.run_review_stage(record, tool_call_log, DEMO_DOCUMENT_NAMES)
-            st.session_state.record = record
-            st.session_state.tool_call_log = tool_call_log
-            st.session_state.document_names = DEMO_DOCUMENT_NAMES
-            st.session_state.vector_store_id = None
-            save_analysis(record)
-            st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or Sensitivity.")
+        for case in DEMO_CASES:
+            if st.button(f"Load demo case ({case['label']})", key=f"load_demo_{case['label']}", type="primary"):
+                with st.spinner("Running demo pipeline..."):
+                    record, tool_call_log = case["run"]()
+                    record = orchestrator.run_review_stage(record, tool_call_log, case["document_names"])
+                st.session_state.record = record
+                st.session_state.tool_call_log = tool_call_log
+                st.session_state.document_names = case["document_names"]
+                st.session_state.vector_store_id = None
+                save_analysis(record)
+                st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or Sensitivity.")
     else:
         col1, col2 = st.columns(2)
         acquirer_name = col1.text_input("Acquiring company", value="Amazon.com, Inc.")

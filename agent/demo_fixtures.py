@@ -333,6 +333,343 @@ def _integration_plan() -> IntegrationPlan:
     )
 
 
+PFIZER_SEAGEN_DOCUMENT_NAMES = {
+    "acquirer_pfizer_overview.md",
+    "target_seagen_overview.md",
+    "transaction_assumptions_pfizer_seagen.md",
+}
+
+
+def _pfizer_profile() -> CompanyProfile:
+    growth = calculate_growth_rate(81_300_000_000, 100_300_000_000, periods=1)
+    margin = calculate_margin(100_300_000_000, 30_000_000_000, "operating")
+    return CompanyProfile(
+        company_name="Pfizer Inc.",
+        role="acquirer",
+        business_description=(
+            "Global biopharmaceutical company reinvesting cash generated during the COVID-19 "
+            "vaccine/treatment cycle into oncology, ahead of an expected step-down in COVID-related "
+            "revenue as demand normalizes."
+        ),
+        fiscal_year="FY2022",
+        revenue=100_300_000_000,
+        revenue_growth_rate=growth["growth_rate"],
+        operating_margin=margin["margin"],
+        employee_count=83_000,
+        key_segments=["Biopharma", "Oncology", "Vaccines"],
+        evidence=[
+            EvidenceItem(
+                claim="Pfizer FY2022 revenue was approximately $100.3 billion, up roughly 23% year over year, driven substantially by COVID-19 products.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="acquirer_pfizer_overview.md", location="Section 2: Financial Highlights")],
+            ),
+            EvidenceItem(
+                claim=f"Revenue growth rate calculated at {growth['growth_rate_pct']}% from FY2021 to FY2022.",
+                claim_type=ClaimType.CALCULATED_RESULT,
+                citations=[Citation(source_document="acquirer_pfizer_overview.md", location="Section 2: Financial Highlights")],
+                notes=growth["method"],
+            ),
+        ],
+    )
+
+
+def _seagen_profile() -> CompanyProfile:
+    margin = calculate_margin(2_000_000_000, -100_000_000, "operating")
+    return CompanyProfile(
+        company_name="Seagen Inc.",
+        role="target",
+        business_description=(
+            "Clinical- and commercial-stage biotechnology company focused on antibody-drug conjugate "
+            "(ADC) therapies for oncology, with several approved therapies sold primarily in the U.S. "
+            "and a pipeline of earlier-stage programs."
+        ),
+        fiscal_year="FY2022",
+        revenue=2_000_000_000,
+        revenue_growth_rate=0.22,
+        operating_margin=margin["margin"],
+        employee_count=2_400,
+        key_segments=["Oncology therapeutics", "Antibody-drug conjugates (ADCs)"],
+        evidence=[
+            EvidenceItem(
+                claim="Seagen markets its approved ADC therapies primarily in the United States and has limited ex-U.S. commercial infrastructure of its own.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 2: Financial Highlights")],
+            ),
+            EvidenceItem(
+                claim="Seagen's FY2022 operating margin was negative, consistent with a clinical/commercial-stage biotech still scaling its launched therapies and funding pipeline R&D.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 2: Financial Highlights")],
+            ),
+        ],
+    )
+
+
+def _pfizer_strategy_assessment() -> AgentAssessment:
+    return AgentAssessment(
+        role=AgentRole.STRATEGY,
+        position=(
+            "Seagen's approved ADC portfolio and pipeline give Pfizer an immediate, de-risked "
+            "diversification away from COVID-dependent revenue and into oncology, a strategic "
+            "priority Pfizer has stated publicly. But the strategic case leans heavily on retaining "
+            "the scientific and clinical talent that built Seagen's ADC platform — the acquisition "
+            "buys a platform and a pipeline, not just currently-marketed products, and platforms "
+            "walk out the door if the people who run them leave."
+        ),
+        key_findings=[
+            EvidenceItem(
+                claim="Seagen's ADC platform is the basis for its approved therapies and its earlier-stage pipeline alike, making the underlying R&D organization, not just current product revenue, central to the deal's value.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 3: Strategic Context")],
+            ),
+            EvidenceItem(
+                claim="Pfizer has publicly stated a strategic priority of diversifying into oncology ahead of an expected decline in COVID-related revenue.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="acquirer_pfizer_overview.md", location="Section 1: Business Description")],
+            ),
+        ],
+    )
+
+
+def _seagen_cost_opportunity() -> tuple[ValueOpportunity, dict]:
+    calc_inputs = {
+        "baseline_cost": 800_000_000,
+        "reduction_pct_low": 0.10,
+        "reduction_pct_base": 0.18,
+        "reduction_pct_high": 0.25,
+    }
+    calc = calculate_savings_scenario(**calc_inputs)
+    opp = ValueOpportunity(
+        title="Consolidate duplicate G&A and ex-U.S. commercial infrastructure",
+        category=Category.COST_SYNERGY,
+        rationale="Seagen has built limited commercial infrastructure outside the U.S.; folding its G&A and any nascent ex-U.S. commercial buildout into Pfizer's existing global infrastructure removes duplicated fixed cost rather than requiring Seagen to build its own.",
+        evidence=[
+            EvidenceItem(
+                claim="Seagen markets its approved ADC therapies primarily in the United States and has limited ex-U.S. commercial infrastructure of its own.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 2: Financial Highlights")],
+            )
+        ],
+        estimated_value=EstimatedValue(low=calc["low"], base=calc["base"], high=calc["high"]),
+        assumptions=["Combined G&A / early ex-U.S. commercial cost base of ~$800M/year", "Costs can be reduced 10-25% within 18-24 months by routing through Pfizer's existing infrastructure"],
+        implementation_difficulty=Difficulty.MEDIUM,
+        time_horizon="18-24 months",
+        key_risks=["Regulatory approval timelines for combined ex-U.S. filings", "Disruption to existing Seagen commercial operations during transition"],
+        calculation_method="calculate_savings_scenario",
+        calculation_inputs=calc_inputs,
+        cost_to_achieve=90_000_000,
+        year_1_pct=0.25,
+        year_2_pct=0.70,
+        year_3_pct=1.0,
+    )
+    tool_call = {"name": "calculate_savings_scenario", "arguments": calc_inputs, "result": calc}
+    return opp, tool_call
+
+
+def _seagen_revenue_opportunity() -> tuple[ValueOpportunity, dict]:
+    """Deliberately weak (hypothesis, no pilot data) even though it carries a citation — the
+    citation grounds it in an uploaded document (so it isn't flagged as unrelated evidence),
+    but Red-Team still has a real, separate basis to challenge the assumed uplift rate itself.
+    """
+    calc_inputs = {
+        "baseline_revenue": 600_000_000,
+        "uplift_pct_low": 0.05,
+        "uplift_pct_base": 0.08,
+        "uplift_pct_high": 0.12,
+        "incremental_margin_pct": 0.5,
+    }
+    calc = calculate_revenue_scenario(**calc_inputs)
+    opp = ValueOpportunity(
+        title="Accelerate Seagen ADC launches into Pfizer's ex-U.S. oncology markets",
+        category=Category.REVENUE_SYNERGY,
+        rationale="Pfizer's existing global regulatory and commercial infrastructure could accelerate ex-U.S. launches of Seagen's approved and near-term-pipeline ADC therapies beyond what Seagen could achieve alone.",
+        evidence=[
+            EvidenceItem(
+                claim="Pfizer's global regulatory and commercial infrastructure could plausibly accelerate ex-U.S. launch timelines for Seagen's therapies, though no comparable prior launch-acceleration case is cited yet.",
+                claim_type=ClaimType.HYPOTHESIS,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 3: Strategic Context")],
+                notes="No comparable prior launch or attach-rate data exists yet to support the specific uplift assumed here.",
+            )
+        ],
+        estimated_value=EstimatedValue(low=calc["low"], base=calc["base"], high=calc["high"]),
+        assumptions=["Addressable ex-U.S. oncology revenue base of ~$600M/year", "5-12% incremental uplift from faster ex-U.S. launch timing"],
+        implementation_difficulty=Difficulty.HIGH,
+        time_horizon="12-24 months",
+        key_risks=["No comparable prior case to validate the assumed uplift rate", "Ex-U.S. regulatory timelines are outside Pfizer's direct control"],
+        calculation_method="calculate_revenue_scenario",
+        calculation_inputs=calc_inputs,
+        cost_to_achieve=15_000_000,
+        year_1_pct=0.20,
+        year_2_pct=0.60,
+        year_3_pct=1.0,
+    )
+    tool_call = {"name": "calculate_revenue_scenario", "arguments": calc_inputs, "result": calc}
+    return opp, tool_call
+
+
+def _pfizer_financial_assessment() -> tuple[AgentAssessment, list[dict], list[FinancialBaseline]]:
+    combined = calculate_combined_metric(100_300_000_000, 2_000_000_000, adjustment_pct=0.0)
+    baselines = [
+        FinancialBaseline(metric="Pfizer revenue growth (FY21->FY22)", value=0.2337, unit="fraction", method="CAGR", inputs={"beginning": 81_300_000_000, "ending": 100_300_000_000}),
+        FinancialBaseline(metric="Seagen operating margin (FY22)", value=-0.05, unit="fraction", method="operating_margin = operating_income / revenue", inputs={"revenue": 2_000_000_000, "operating_income": -100_000_000}),
+        FinancialBaseline(metric="Pro-forma combined revenue", value=combined["combined_value"], unit="USD", method=combined["method"], inputs={"acquirer": 100_300_000_000, "target": 2_000_000_000}),
+    ]
+    cost_opp, cost_call = _seagen_cost_opportunity()
+    revenue_opp, revenue_call = _seagen_revenue_opportunity()
+    assessment = AgentAssessment(
+        role=AgentRole.FINANCIAL,
+        position=(
+            "The cost-synergy case for routing Seagen's G&A and any ex-U.S. commercial buildout "
+            "through Pfizer's existing infrastructure is grounded in Seagen's own limited ex-U.S. "
+            "footprint and produces a defensible $80-200M range. The ex-U.S. launch-acceleration "
+            "revenue opportunity is directionally plausible — Pfizer's global infrastructure is real "
+            "— but the specific 5-12% uplift has no comparable prior case behind it and should be "
+            "tracked as a hypothesis pending an actual launch, not treated as a base-case number."
+        ),
+        key_findings=[
+            EvidenceItem(
+                claim=f"Pro-forma combined revenue calculated at ${combined['combined_value']:,.0f}.",
+                claim_type=ClaimType.CALCULATED_RESULT,
+                notes=combined["method"],
+            )
+        ],
+        opportunities=[cost_opp, revenue_opp],
+    )
+    return assessment, [cost_call, revenue_call], baselines
+
+
+def _seagen_red_team_assessment() -> AgentAssessment:
+    return AgentAssessment(
+        role=AgentRole.RED_TEAM,
+        position=(
+            "The analysis treats Seagen's ADC platform as a stable asset, but biotech acquisitions "
+            "of this kind live or die on retaining the scientists and clinicians who built the "
+            "pipeline — that risk isn't priced into the strategic case. Separately, the ex-U.S. "
+            "launch-acceleration revenue estimate rests on an assumed uplift rate with no comparable "
+            "prior launch to validate it; it should be a pending hypothesis, not a base-case number "
+            "used in the total value-creation figure."
+        ),
+        challenges=[
+            Challenge(
+                target_agent=AgentRole.FINANCIAL,
+                target_claim="Accelerate Seagen ADC launches into Pfizer's ex-U.S. oncology markets",
+                critique="The assumed 5-12% uplift rate has no comparable prior launch-acceleration case behind it; treat as a hypothesis pending an actual launch, not a scenario ready for approval.",
+                severity=RiskSeverity.HIGH,
+            ),
+            Challenge(
+                target_agent=AgentRole.STRATEGY,
+                target_claim="Seagen's approved ADC portfolio and pipeline give Pfizer an immediate, de-risked diversification away from COVID-dependent revenue",
+                critique="Doesn't address the risk that key Seagen scientists and clinical leaders leave post-close, which would erode the pipeline value the strategic case depends on.",
+                severity=RiskSeverity.MEDIUM,
+            ),
+        ],
+    )
+
+
+def _pfizer_seagen_strategic_rationale() -> StrategicRationale:
+    return StrategicRationale(
+        summary=(
+            "Pfizer gains an approved oncology ADC portfolio and pipeline, diversifying away from "
+            "COVID-dependent revenue ahead of its expected decline, while Seagen gains Pfizer's "
+            "global regulatory and commercial infrastructure to accelerate its therapies into "
+            "markets it could not efficiently reach on its own."
+        ),
+        supporting_points=[
+            EvidenceItem(
+                claim="Seagen's ADC platform is the basis for its approved therapies and its earlier-stage pipeline alike, making the underlying R&D organization, not just current product revenue, central to the deal's value.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 3: Strategic Context")],
+            )
+        ],
+    )
+
+
+def _pfizer_seagen_risks() -> list[Risk]:
+    return [
+        Risk(
+            title="Key scientist and R&D talent attrition",
+            description="Seagen's ADC platform depends on a concentrated group of scientists and clinical leaders; biotech acquirers routinely see meaningful post-close attrition among exactly this group.",
+            category="people",
+            severity=RiskSeverity.HIGH,
+            likelihood=RiskSeverity.HIGH,
+            mitigation="Put retention packages in place for named key scientists and clinical leaders before close; keep the R&D organization operating semi-autonomously through year one.",
+            evidence=[
+                EvidenceItem(
+                    claim="Seagen's ADC platform is the basis for its approved therapies and its earlier-stage pipeline alike, making the underlying R&D organization, not just current product revenue, central to the deal's value.",
+                    claim_type=ClaimType.DOCUMENTED_FACT,
+                    citations=[Citation(source_document="target_seagen_overview.md", location="Section 3: Strategic Context")],
+                )
+            ],
+        ),
+        Risk(
+            title="Clinical trial and regulatory delay for pipeline programs",
+            description="Seagen's earlier-stage pipeline programs carry ordinary clinical and regulatory timeline risk, which a combined entity does not eliminate.",
+            category="regulatory",
+            severity=RiskSeverity.HIGH,
+            likelihood=RiskSeverity.MEDIUM,
+            mitigation="Align regulatory submission strategy across both companies' teams within the first 60 days rather than deferring it to post-integration.",
+        ),
+    ]
+
+
+def _pfizer_seagen_integration_plan() -> IntegrationPlan:
+    return IntegrationPlan(
+        guiding_principles=[
+            "Keep Seagen's R&D organization operating semi-autonomously through year one",
+            "Put key-scientist retention packages in place before close, not after",
+            "Pilot the ex-U.S. launch-acceleration thesis on one program before assuming it across the pipeline",
+        ],
+        actions=[
+            IntegrationAction(title="Stand up integration management office", phase="0-30 days", owner_role="Head of Integration Management Office", description="Establish joint steering committee and weekly cadence.", success_metric="IMO operating within 2 weeks of close"),
+            IntegrationAction(title="Finalize retention packages for named key scientists and clinical leaders", phase="0-30 days", owner_role="Head of R&D Integration", description="Identify and lock in retention terms for the R&D and clinical leaders the ADC platform depends on before uncertainty drives attrition.", linked_opportunity=None, success_metric="Retention agreements signed for all named key personnel", risks=["Key personnel identified too late, after attrition risk has already materialized"]),
+            IntegrationAction(title="Align global regulatory submission strategy", phase="31-60 days", owner_role="VP Regulatory Affairs", description="Merge regulatory filing plans for Seagen's pipeline programs into Pfizer's global submission calendar.", success_metric="Joint regulatory calendar published", risks=["Clinical trial or regulatory delays"]),
+            IntegrationAction(title="Pilot an accelerated ex-U.S. launch for one approved therapy", phase="61-100 days", owner_role="VP Oncology Commercial", description="Test the assumed launch-acceleration uplift on a single approved therapy in one ex-U.S. market before committing to the revenue scenario across the portfolio.", linked_opportunity="Accelerate Seagen ADC launches into Pfizer's ex-U.S. oncology markets", success_metric="Measured launch-timeline acceleration vs. Seagen's standalone baseline", risks=["No comparable prior case to benchmark against"]),
+        ],
+        governance="Joint steering committee (Pfizer + Seagen leadership) meets weekly for the first 100 days; IMO reports variances against this plan.",
+    )
+
+
+def run_pfizer_seagen_pipeline() -> tuple[AnalysisRecord, list[dict]]:
+    """A second, distinctly different demo case — large-cap pharma acquiring a clinical/commercial
+    biotech, instead of e-commerce acquiring grocery retail — so the demo isn't just one industry's
+    story. Deliberately lands on a different verdict (proceed with conditions, not further diligence)
+    by giving the weak revenue opportunity a citation (so it isn't flagged as ungrounded) while still
+    giving Red-Team a real, separate basis — the unvalidated uplift rate — to challenge it on.
+    """
+    transaction = TransactionAssumptions(
+        acquirer_name="Pfizer Inc.",
+        target_name="Seagen Inc.",
+        announcement_date="2023-03-13",
+        deal_value=43_000_000_000,
+        deal_structure="All-cash merger",
+        user_notes="Demo mode: synthetic sample documents, no live OpenAI calls.",
+    )
+    financial_assessment, tool_call_log, baselines = _pfizer_financial_assessment()
+    strategy_assessment = _pfizer_strategy_assessment()
+    red_team_assessment = _seagen_red_team_assessment()
+
+    record = AnalysisRecord(
+        transaction=transaction,
+        acquirer_profile=_pfizer_profile(),
+        target_profile=_seagen_profile(),
+        strategic_rationale=_pfizer_seagen_strategic_rationale(),
+        financial_baselines=baselines,
+        opportunities=financial_assessment.opportunities,
+        agent_assessments=[strategy_assessment, financial_assessment, red_team_assessment],
+        risks=_pfizer_seagen_risks(),
+        integration_plan=_pfizer_seagen_integration_plan(),
+        assumptions_approved=True,
+        executive_summary=(
+            "[DEMO MODE — synthetic sample documents, not a live analysis] Pfizer's acquisition of "
+            "Seagen pairs an approved, if still-unprofitable, oncology ADC platform with Pfizer's "
+            "global regulatory and commercial infrastructure. The Strategy and Financial agents see "
+            "a credible cost-synergy case in ex-U.S. infrastructure consolidation; the Red-Team "
+            "agent's strongest objections are unaddressed key-scientist retention risk and an "
+            "ex-U.S. launch-acceleration revenue estimate that rests on an unvalidated uplift rate."
+        ),
+    )
+    return record, tool_call_log
+
+
 def run_demo_pipeline() -> tuple[AnalysisRecord, list[dict]]:
     """Builds a complete, internally-consistent AnalysisRecord with no API calls."""
     transaction = TransactionAssumptions(
@@ -368,3 +705,17 @@ def run_demo_pipeline() -> tuple[AnalysisRecord, list[dict]]:
         ),
     )
     return record, tool_call_log
+
+
+DEMO_CASES = [
+    {
+        "label": "Amazon acquires Whole Foods",
+        "run": run_demo_pipeline,
+        "document_names": DOCUMENT_NAMES,
+    },
+    {
+        "label": "Pfizer acquires Seagen",
+        "run": run_pfizer_seagen_pipeline,
+        "document_names": PFIZER_SEAGEN_DOCUMENT_NAMES,
+    },
+]

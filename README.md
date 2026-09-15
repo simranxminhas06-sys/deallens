@@ -15,17 +15,29 @@ re-checks citations and calculations rather than trusting the agents' own
 self-report.
 
 **Try it with no API key and no cost**: pick "Demo (no API key)" in the
-sidebar and click "Load demo case" — it runs the full pipeline, independent
-assessments included, against a hand-authored Amazon/Whole Foods fixture
+sidebar and click either "Load demo case" button — each runs the full
+pipeline, independent assessments included, against a hand-authored fixture
 (`agent/demo_fixtures.py`). "Live (OpenAI)" mode runs the same pipeline for
 real against uploaded documents, optionally supplemented by live web search
 for public company background (see "Researching without uploaded documents"
 below).
 
-Demo case: **Amazon's 2017 acquisition of Whole Foods Market**, using simplified
-synthetic documents in [`sample_data/`](sample_data/) (not the real filings — see
-that folder's README) so the output can be sanity-checked against what actually
-happened post-close.
+Two demo cases, deliberately different industries and outcomes so the tool
+doesn't read as tuned to one story:
+
+- **Amazon's 2017 acquisition of Whole Foods Market** — e-commerce acquiring
+  grocery retail, using simplified synthetic documents in
+  [`sample_data/`](sample_data/) (not the real filings — see that folder's
+  README) so the output can be sanity-checked against what actually happened
+  post-close. The revenue-synergy opportunity has no citation, so the
+  reviewer flags it and the verdict lands on **Further diligence required**.
+- **Pfizer's 2023 acquisition of Seagen** — large-cap pharma acquiring a
+  clinical/commercial oncology biotech, a distinctly different value-creation
+  story (talent-retention and regulatory risk instead of cultural/brand risk,
+  R&D-platform economics instead of retail cost synergies). Its weak
+  opportunity is grounded in a citation, so the review passes cleanly —
+  Red-Team's objection to the assumed uplift rate is a real, separate basis
+  for challenge, landing the verdict on **Proceed with conditions** instead.
 
 The visual theme (navy/charcoal with a bright blue accent) lives in
 [`.streamlit/config.toml`](.streamlit/config.toml) — Streamlit's own theming
@@ -252,6 +264,11 @@ elsewhere (no separate calculation to drift out of sync):
   cost-synergy calculation is *not* flagged, and two runs are byte-identical
   (no hidden randomness). No API key required — this is the fastest way to
   sanity-check the whole system after a change.
+- `tests/test_demo_mode_pfizer_seagen.py` — the same end-to-end checks against
+  the second demo case, plus the assertions that make it a distinct case
+  rather than a reskin: the review passes cleanly (100% citation coverage, no
+  issues) and the verdict is *Proceed with conditions*, not *Further
+  diligence required*.
 - `tests/test_sensitivity.py` — the tornado ranking (stated bounds for a
   `_base` percentage, default ±20% swing otherwise, sorted by swing size) and
   the combined downside/upside scenario total. No API key required.
@@ -386,9 +403,10 @@ Staged so each piece is working before the next is added:
 8. ✅ **PDF report export** — a formatted PDF (`tools/pdf_generator.py`, pure Python via reportlab, no system-binary dependency) alongside the existing Markdown download, with the same Recommendation/Deal Economics/ramp sections.
 9. ✅ **PowerPoint IC deck export** — a 10-12 slide deck (`tools/pptx_generator.py`, pure `python-pptx`) alongside the Markdown/PDF report, styled to match the app's theme — the format a deal team actually presents, not just files.
 10. ✅ **Value-creation charts** — a waterfall bridging cost + revenue synergies to total value creation (Recommendation), a 3-year value-realization stacked bar (Independent Assessments), and a likelihood x impact risk heat map (Risk Register) — the app had exactly one chart (the tornado) before this.
-11. ✅ **Grouped sidebar navigation** — `st.navigation()` with five labeled sections (Setup / Analysis / Decision / Execution & Reporting / Appendix) replacing a flat 10-item radio list, so the sidebar itself communicates the deal-team workflow instead of just a numbered list (this version).
-12. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-13. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+11. ✅ **Grouped sidebar navigation** — `st.navigation()` with five labeled sections (Setup / Analysis / Decision / Execution & Reporting / Appendix) replacing a flat 10-item radio list, so the sidebar itself communicates the deal-team workflow instead of just a numbered list.
+12. ✅ **A second demo case** — Pfizer's acquisition of Seagen (large-cap pharma / clinical-stage biotech) alongside Amazon/Whole Foods, so Demo mode proves the tool generalizes across industries instead of reading as tuned to one story. Deliberately lands on a different verdict (proceed with conditions vs. further diligence) via a genuinely different evidence gap, not just different company names on the same numbers (this version).
+13. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+14. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 

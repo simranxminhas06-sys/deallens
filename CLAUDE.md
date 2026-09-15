@@ -11,8 +11,9 @@ A portfolio project: a multi-agent M&A value-creation analysis tool. Three agent
 (Strategy, Financial, Red-Team) independently assess a deal and argue about it; a
 deterministic reviewer and a rule-based verdict engine sit on top — evidence
 discipline over AI vibes is the whole point. Runs in Streamlit, in either a free
-no-API-key Demo mode (hand-authored Amazon/Whole Foods fixture) or a Live mode
-against real OpenAI calls.
+no-API-key Demo mode (two hand-authored fixtures — Amazon/Whole Foods and
+Pfizer/Seagen, deliberately different industries and verdict outcomes, see
+`agent/demo_fixtures.py`) or a Live mode against real OpenAI calls.
 
 - **Repo**: https://github.com/simranxminhas06-sys/deallens
 - **Live demo**: https://deallensgit-tblhpvbu7q554cngs2hcux.streamlit.app/ (public,
