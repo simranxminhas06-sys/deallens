@@ -92,28 +92,6 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
-st.sidebar.title("DealLens")
-analysis_mode = st.sidebar.radio("Analysis mode", ["Demo (no API key)", "Live (OpenAI)"], key="analysis_mode")
-is_demo = analysis_mode.startswith("Demo")
-if not is_demo and not os.environ.get("OPENAI_API_KEY"):
-    st.sidebar.warning("OPENAI_API_KEY is not set. Set it in your environment, or switch to Demo mode.")
-
-page = st.sidebar.radio(
-    "Workflow",
-    [
-        "1. Create Analysis", "2. Evidence", "3. Independent Assessments", "4. Sensitivity",
-        "5. Risk Register", "6. Recommendation", "7. 100-Day Plan", "8. Executive Summary",
-        "9. Evidence Trail", "10. Tables",
-    ],
-)
-
-with st.sidebar.expander("Saved analyses"):
-    for row in list_analyses():
-        if st.button(f"{row['acquirer_name']} / {row['target_name']} ({row['created_at'][:10]})", key=f"load_{row['id']}"):
-            st.session_state.record = load_analysis(row["id"])
-            st.rerun()
-
-
 def _require_record():
     if st.session_state.record is None:
         st.info("Start an analysis on the 'Create Analysis' page first.")
@@ -415,8 +393,7 @@ def _render_verdict_banner(level: VerdictLevel) -> None:
         unsafe_allow_html=True,
     )
 
-# ---------------------------------------------------------------- Page 1
-if page == "1. Create Analysis":
+def page_create_analysis():
     st.header("Create Analysis")
 
     if is_demo:
@@ -511,8 +488,7 @@ if page == "1. Create Analysis":
             st.subheader("Documents available")
             st.write(st.session_state.availability_summary)
 
-# ---------------------------------------------------------------- Page 2
-elif page == "2. Evidence":
+def page_evidence():
     _require_record()
     record = st.session_state.record
     st.header("Evidence")
@@ -548,8 +524,7 @@ elif page == "2. Evidence":
         save_analysis(record)
         st.session_state.record = record
 
-# ---------------------------------------------------------------- Page 3
-elif page == "3. Independent Assessments":
+def page_independent_assessments():
     _require_record()
     record = st.session_state.record
     st.header("Independent Assessments")
@@ -608,8 +583,7 @@ elif page == "3. Independent Assessments":
             for call in st.session_state.tool_call_log:
                 st.code(f"{call['name']}({call['arguments']}) -> {call['result']}")
 
-# ---------------------------------------------------------------- Page 4
-elif page == "4. Sensitivity":
+def page_sensitivity():
     _require_record()
     record = st.session_state.record
     st.header("Sensitivity")
@@ -666,8 +640,7 @@ elif page == "4. Sensitivity":
             "live record, so it updates too."
         )
 
-# ---------------------------------------------------------------- Page 5
-elif page == "5. Risk Register":
+def page_risk_register():
     _require_record()
     record = st.session_state.record
     st.header("Risk Register")
@@ -718,8 +691,7 @@ elif page == "5. Risk Register":
             with st.expander(f"Evidence: {r.title}"):
                 _evidence_lines(r.evidence)
 
-# ---------------------------------------------------------------- Page 6
-elif page == "6. Recommendation":
+def page_recommendation():
     _require_record()
     record = st.session_state.record
     st.header("Recommendation")
@@ -767,8 +739,7 @@ elif page == "6. Recommendation":
         "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
     )
 
-# ---------------------------------------------------------------- Page 7
-elif page == "7. 100-Day Plan":
+def page_100_day_plan():
     _require_record()
     record = st.session_state.record
     st.header("100-Day Integration Plan")
@@ -791,8 +762,7 @@ elif page == "7. 100-Day Plan":
             st.markdown(f"- {_md(principle)}")
     st.caption(f"Governance: {_md(record.integration_plan.governance)}")
 
-# ---------------------------------------------------------------- Page 8
-elif page == "8. Executive Summary":
+def page_executive_summary():
     _require_record()
     record = st.session_state.record
     st.header("Executive Summary")
@@ -822,8 +792,7 @@ elif page == "8. Executive Summary":
         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
 
-# ---------------------------------------------------------------- Page 9
-elif page == "9. Evidence Trail":
+def page_evidence_trail():
     _require_record()
     record = st.session_state.record
     st.header("Evidence Trail")
@@ -870,8 +839,7 @@ elif page == "9. Evidence Trail":
                 unsafe_allow_html=True,
             )
 
-# ---------------------------------------------------------------- Page 10
-elif page == "10. Tables":
+def page_tables():
     _require_record()
     record = st.session_state.record
     st.header("Tables")
@@ -956,6 +924,49 @@ elif page == "10. Tables":
             "This reflects the reviewer snapshot from the last time Risk Register generated it — "
             "see Recommendation for a live-recomputed check against your current assumptions."
         )
+
+
+# ---------------------------------------------------------------- Sidebar: mode + navigation
+# Grouped into sections that follow how a deal team actually works: get set up, analyze,
+# decide, execute and package the deliverable, then appendix material — not build order.
+st.sidebar.title("DealLens")
+analysis_mode = st.sidebar.radio("Analysis mode", ["Demo (no API key)", "Live (OpenAI)"], key="analysis_mode")
+is_demo = analysis_mode.startswith("Demo")
+if not is_demo and not os.environ.get("OPENAI_API_KEY"):
+    st.sidebar.warning("OPENAI_API_KEY is not set. Set it in your environment, or switch to Demo mode.")
+
+nav = st.navigation(
+    {
+        "Setup": [
+            st.Page(page_create_analysis, title="Create Analysis", icon=":material/edit_document:", url_path="create-analysis", default=True),
+            st.Page(page_evidence, title="Evidence", icon=":material/fact_check:", url_path="evidence"),
+        ],
+        "Analysis": [
+            st.Page(page_independent_assessments, title="Independent Assessments", icon=":material/forum:", url_path="assessments"),
+            st.Page(page_sensitivity, title="Sensitivity", icon=":material/monitoring:", url_path="sensitivity"),
+            st.Page(page_risk_register, title="Risk Register", icon=":material/warning:", url_path="risk-register"),
+        ],
+        "Decision": [
+            st.Page(page_recommendation, title="Recommendation", icon=":material/gavel:", url_path="recommendation"),
+        ],
+        "Execution & Reporting": [
+            st.Page(page_100_day_plan, title="100-Day Plan", icon=":material/calendar_month:", url_path="100-day-plan"),
+            st.Page(page_executive_summary, title="Executive Summary", icon=":material/summarize:", url_path="executive-summary"),
+        ],
+        "Appendix": [
+            st.Page(page_evidence_trail, title="Evidence Trail", icon=":material/link:", url_path="evidence-trail"),
+            st.Page(page_tables, title="Tables", icon=":material/table_chart:", url_path="tables"),
+        ],
+    }
+)
+
+with st.sidebar.expander("Saved analyses"):
+    for row in list_analyses():
+        if st.button(f"{row['acquirer_name']} / {row['target_name']} ({row['created_at'][:10]})", key=f"load_{row['id']}"):
+            st.session_state.record = load_analysis(row["id"])
+            st.rerun()
+
+nav.run()
 
 # ---------------------------------------------------------------- Sidebar: live deal scorecard
 # Placed at the end of the script (not with the rest of the sidebar near the top) so it

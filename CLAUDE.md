@@ -33,8 +33,13 @@ against real OpenAI calls.
 
 ## Architecture map
 
-- `app.py` — the entire Streamlit UI, 10-page workflow (see below). All page bodies
-  live in one big if/elif chain; shared render helpers are defined above it.
+- `app.py` — the entire Streamlit UI, 10 pages (see below). Each page is a
+  `page_*()` function; shared render helpers are defined above them. Navigation is
+  `st.navigation()` with pages grouped into five sidebar sections (Setup / Analysis /
+  Decision / Execution & Reporting / Appendix) — the dict literal wiring pages to
+  sections and titles/icons/`url_path`s lives right before `nav.run()`, near the
+  bottom of the file (it has to come after every `page_*()` def exists to reference
+  them, and after `is_demo` is computed).
 - `agent/` — orchestration and the deterministic stages: `reviewer.py`,
   `sensitivity.py` (tornado + downside/upside), `verdict.py`, `demo_fixtures.py`
   (the fictional Amazon/Whole Foods case), plus the LLM-calling agents
@@ -52,20 +57,34 @@ against real OpenAI calls.
 
 ## Current workflow order (app.py page list)
 
-Ordered by deal-team logic, not build order: analyze → stress-test → assess risk →
-decide → plan execution → package the deliverable → appendices.
+Grouped by deal-team logic, not build order: get set up, analyze, decide, plan
+execution, package the deliverable, then appendices. The grouping is a real
+`st.navigation()` section, not just a comment — it's what renders as section
+headers in the sidebar.
 
+**Setup**
 1. Create Analysis
 2. Evidence
+
+**Analysis**
 3. Independent Assessments (Strategy/Financial/Red-Team debate; scenario-assumption
-   sliders live here, recomputing instantly via `financial_calculator` — no LLM)
+   sliders live here, recomputing instantly via `financial_calculator` — no LLM; a
+   "3-Year Value Realization" chart at the top aggregates the ramp across every
+   opportunity)
 4. Sensitivity (tornado chart + downside/upside)
-5. Risk Register (the "Generate risk register, integration plan, and review" button
-   lives here — one click also populates 100-Day Plan and Executive Summary)
-6. Recommendation (rule-based verdict; recomputes a fresh review live, doesn't
-   depend on Risk Register having been run)
+5. Risk Register (a likelihood x impact heat map above the table; the "Generate risk
+   register, integration plan, and review" button lives here — one click also
+   populates 100-Day Plan and Executive Summary)
+
+**Decision**
+6. Recommendation (rule-based verdict + a "Value Creation Bridge" waterfall chart;
+   recomputes a fresh review live, doesn't depend on Risk Register having been run)
+
+**Execution & Reporting**
 7. 100-Day Plan
-8. Executive Summary (narrative + Markdown/PDF download)
+8. Executive Summary (narrative + Markdown/PDF/PowerPoint download)
+
+**Appendix**
 9. Evidence Trail (pick any claim-bearing item, see its claims color-coded by type
    with citations)
 10. Tables (every structured table in one place: company profiles, financial
@@ -97,6 +116,12 @@ sidebar near the top — it has to run after any page body that might mutate
 - Claim/citation text rendered via `unsafe_allow_html=True` (Evidence Trail, verdict
   banner) is always passed through `html.escape()` first — it ultimately originates
   from uploaded documents or web search, i.e. untrusted content.
+- **The `st.navigation()` pages dict must be built after every `page_*()` function is
+  defined**, since it holds the actual function objects, not string names — define a
+  new page function above the dict, not below it. `is_demo` (used inside
+  `page_create_analysis()`) is a plain module global read at call time, so it's fine
+  that it's assigned later in the file, after the function defs — but it still has to
+  be assigned before `nav.run()` actually runs, i.e. before the dict-building code.
 
 ## Development commands
 

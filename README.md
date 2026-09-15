@@ -321,25 +321,34 @@ streamlit run app.py
 ```
 
 That's enough to try **Demo mode** — no API key, no cost. In the sidebar,
-keep "Demo (no API key)" selected, go to **1. Create Analysis**, and click
+keep "Demo (no API key)" selected, go to **Create Analysis**, and click
 "Load demo case." Then browse the rest of the workflow — everything is
 already populated, and the sidebar's "Live deal scorecard" tracks total value
 creation against the original case and the deal's purchase price as you
-adjust any slider:
+adjust any slider.
 
-- **2. Evidence** — company profiles and strategic rationale
-- **3. Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute; a "3-Year Value Realization" chart at the top shows revenue vs. cost synergy stacked by year, aggregated across every opportunity
-- **4. Sensitivity** — a tornado chart plus a downside/upside scenario, stress-testing the base case before you commit to it
-- **5. Risk Register** — a likelihood × impact risk matrix (the standard consulting 3x3 heat map) above the table, sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
-- **6. Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture, with a "Value Creation Bridge" waterfall chart (cost synergies + revenue synergies → total value creation) built from the same numbers driving the verdict
-- **7. 100-Day Plan** — the phased integration plan, guiding principles, and governance — the execution plan for a deal you've decided to proceed with
-- **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report or PowerPoint IC deck
-- **9. Evidence Trail** — every claim traced to its citation
-- **10. Tables** — every structured table in the analysis (company profiles, financial baseline, opportunities, integration actions, reviewer issues) in one place
+The sidebar navigation (`st.navigation()`) is grouped into five sections that
+mirror how a deal team actually works, not the order features were built in:
 
-The order follows how a deal team actually works: independent analysis, then
-stress-test it, then assess risk, then decide, then plan execution, then
-package the deliverable — not the order features were built in.
+**Setup**
+- **Create Analysis**
+- **Evidence** — company profiles and strategic rationale
+
+**Analysis**
+- **Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute; a "3-Year Value Realization" chart at the top shows revenue vs. cost synergy stacked by year, aggregated across every opportunity
+- **Sensitivity** — a tornado chart plus a downside/upside scenario, stress-testing the base case before you commit to it
+- **Risk Register** — a likelihood × impact risk matrix (the standard consulting 3x3 heat map) above the table, sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
+
+**Decision**
+- **Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture, with a "Value Creation Bridge" waterfall chart (cost synergies + revenue synergies → total value creation) built from the same numbers driving the verdict
+
+**Execution & Reporting**
+- **100-Day Plan** — the phased integration plan, guiding principles, and governance — the execution plan for a deal you've decided to proceed with
+- **Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report or PowerPoint IC deck
+
+**Appendix**
+- **Evidence Trail** — every claim traced to its citation
+- **Tables** — every structured table in the analysis (company profiles, financial baseline, opportunities, integration actions, reviewer issues) in one place
 
 For a **live run** against real OpenAI calls: switch the sidebar to "Live
 (OpenAI)", set `OPENAI_API_KEY` in your environment first —
@@ -350,13 +359,13 @@ export $(cat .env | xargs)
 streamlit run app.py
 ```
 
-— then work through the same pages: **1. Create Analysis** (keep the
-bundled sample documents checked, or upload your own) → **2. Evidence**
-(review extracted facts, approve assumptions) → **3. Independent Assessments**
-(run Strategy → Financial → Red-Team) → **4. Sensitivity** → **5. Risk
+— then work through the same pages in order: **Create Analysis** (keep the
+bundled sample documents checked, or upload your own) → **Evidence**
+(review extracted facts, approve assumptions) → **Independent Assessments**
+(run Strategy → Financial → Red-Team) → **Sensitivity** → **Risk
 Register** (run risk register, plan, reviewer, and executive summary
-generation here) → **6–10** (all live, no extra step needed once
-opportunities exist).
+generation here) → everything in **Decision**, **Execution & Reporting**, and
+**Appendix** (all live, no extra step needed once opportunities exist).
 
 Run tests any time (no API key needed) with `pytest`.
 
@@ -372,9 +381,11 @@ Staged so each piece is working before the next is added:
 6. ✅ **Risk likelihood x impact scoring** — the risk register is a composite 1-9 score (likelihood x impact), sorted highest first, instead of a single severity label (this version).
 7. ✅ **Evidence Trail** — pick any claim-bearing item (a profile, the rationale, an opportunity, a risk, an agent's key findings) and see each underlying claim, color-coded by claim type, with the exact citation it rests on or a note that it has none (this version).
 8. ✅ **PDF report export** — a formatted PDF (`tools/pdf_generator.py`, pure Python via reportlab, no system-binary dependency) alongside the existing Markdown download, with the same Recommendation/Deal Economics/ramp sections.
-9. ✅ **PowerPoint IC deck export** — a 10-12 slide deck (`tools/pptx_generator.py`, pure `python-pptx`) alongside the Markdown/PDF report, styled to match the app's theme — the format a deal team actually presents, not just files (this version).
-10. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
-11. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
+9. ✅ **PowerPoint IC deck export** — a 10-12 slide deck (`tools/pptx_generator.py`, pure `python-pptx`) alongside the Markdown/PDF report, styled to match the app's theme — the format a deal team actually presents, not just files.
+10. ✅ **Value-creation charts** — a waterfall bridging cost + revenue synergies to total value creation (Recommendation), a 3-year value-realization stacked bar (Independent Assessments), and a likelihood x impact risk heat map (Risk Register) — the app had exactly one chart (the tornado) before this.
+11. ✅ **Grouped sidebar navigation** — `st.navigation()` with five labeled sections (Setup / Analysis / Decision / Execution & Reporting / Appendix) replacing a flat 10-item radio list, so the sidebar itself communicates the deal-team workflow instead of just a numbered list (this version).
+12. **Operations, Customer, and People & Change agents** — supply-chain/duplicated-function analysis, cross-sell/cannibalization analysis, and org/culture risk + change-management planning, each following the same `AgentAssessment` pattern as Strategy/Financial/Red-Team.
+13. **Partner Challenge Mode** — a Q&A screen that scores the user's own defense of the analysis (structure, evidence use, quantitative reasoning) after they've seen it.
 
 ## What a production version would add
 
