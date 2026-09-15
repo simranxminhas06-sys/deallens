@@ -220,6 +220,22 @@ All three are recomputed live wherever they're shown (the Sensitivity and Recomm
 and the sidebar's "Live deal scorecard") rather than cached on the record, so dragging a scenario
 assumption slider on Independent Assessments updates them immediately.
 
+## Charts
+
+Beyond the tornado chart above, three more Altair charts turn tabular data into the visuals a
+deal team actually presents, all built in `app.py` directly from numbers already computed
+elsewhere (no separate calculation to drift out of sync):
+
+- **Value Creation Bridge** (Recommendation page) — a waterfall/bridge chart: cost synergies,
+  then revenue synergies bridging up to total value creation, then a full total bar. The classic
+  banking/consulting bridge chart for "where does this number come from."
+- **3-Year Value Realization** (Independent Assessments page) — a stacked bar chart of revenue
+  vs. cost synergy value by year, aggregated across every opportunity's `year_1_pct`/`year_2_pct`/
+  `year_3_pct` ramp, showing when value creation actually lands rather than just its final total.
+- **Risk Matrix** (Risk Register page) — the standard 3x3 likelihood × impact heat map. The grid
+  itself is a static green/amber/red score backdrop; only cells holding a risk get a count label,
+  so an empty cell reads as "no risk here," not as a rendering gap.
+
 ## How it was tested
 
 - `tests/test_financial_calculator.py` — unit tests for every calculation
@@ -312,10 +328,10 @@ creation against the original case and the deal's purchase price as you
 adjust any slider:
 
 - **2. Evidence** — company profiles and strategic rationale
-- **3. Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute
+- **3. Independent Assessments** — the debate transcript, with live sliders on each opportunity to drag its underlying assumptions and watch the estimate recompute; a "3-Year Value Realization" chart at the top shows revenue vs. cost synergy stacked by year, aggregated across every opportunity
 - **4. Sensitivity** — a tornado chart plus a downside/upside scenario, stress-testing the base case before you commit to it
-- **5. Risk Register** — sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
-- **6. Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture
+- **5. Risk Register** — a likelihood × impact risk matrix (the standard consulting 3x3 heat map) above the table, sorted by likelihood × impact score (click "Generate risk register, integration plan, and review" here first; that one action also populates 100-Day Plan and Executive Summary)
+- **6. Recommendation** — the rule-based verdict, informed by the sensitivity and risk picture, with a "Value Creation Bridge" waterfall chart (cost synergies + revenue synergies → total value creation) built from the same numbers driving the verdict
 - **7. 100-Day Plan** — the phased integration plan, guiding principles, and governance — the execution plan for a deal you've decided to proceed with
 - **8. Executive Summary** — the summary narrative plus the downloadable Markdown/PDF report or PowerPoint IC deck
 - **9. Evidence Trail** — every claim traced to its citation

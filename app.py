@@ -272,6 +272,126 @@ def _render_tornado_chart(rows: list[dict], total_base: float, max_rows: int = 8
     st.altair_chart((bars + base_rule).properties(height=32 * len(top_rows) + 20), use_container_width=True)
 
 
+def _render_value_waterfall(opportunities, total_value: float) -> None:
+    """Cost synergies + revenue synergies bridging to total value creation — the classic
+    banking/consulting bridge chart, built from the same opportunity values shown everywhere
+    else (no separate calculation), so it can't drift from the numbers driving the verdict.
+    """
+    cost_total = sum(o.estimated_value.base for o in opportunities if o.category.value == "cost_synergy")
+    revenue_total = sum(o.estimated_value.base for o in opportunities if o.category.value == "revenue_synergy")
+    stages = ["Cost synergies", "Revenue synergies", "Total value creation"]
+    df = pd.DataFrame(
+        [
+            {"stage": stages[0], "start": 0, "end": cost_total, "amount": cost_total, "kind": "Component"},
+            {"stage": stages[1], "start": cost_total, "end": total_value, "amount": revenue_total, "kind": "Component"},
+            {"stage": stages[2], "start": 0, "end": total_value, "amount": total_value, "kind": "Total"},
+        ]
+    )
+    bars = (
+        alt.Chart(df)
+        .mark_bar(size=60)
+        .encode(
+            x=alt.X("stage:N", sort=stages, title=None),
+            y=alt.Y("start:Q", title="Value ($)", axis=alt.Axis(format="$,.2s")),
+            y2="end:Q",
+            color=alt.Color(
+                "kind:N",
+                scale=alt.Scale(domain=["Component", "Total"], range=["#3B7AFF", "#1FA971"]),
+                legend=None,
+            ),
+            tooltip=[alt.Tooltip("stage:N", title="Stage"), alt.Tooltip("amount:Q", title="Amount", format="$,.0f")],
+        )
+    )
+    labels = (
+        alt.Chart(df)
+        .mark_text(dy=-10, color="#E7ECF5", fontWeight="bold")
+        .encode(x=alt.X("stage:N", sort=stages), y=alt.Y("end:Q"), text=alt.Text("amount:Q", format="$,.2s"))
+    )
+    st.altair_chart((bars + labels).properties(height=280), use_container_width=True)
+
+
+def _render_ramp_chart(opportunities) -> None:
+    """Aggregate 3-year value realization, revenue vs. cost synergy, stacked per year — shows
+    when the identified value creation actually lands, not just its final total.
+    """
+    revenue_opps = [o for o in opportunities if o.category.value == "revenue_synergy"]
+    cost_opps = [o for o in opportunities if o.category.value == "cost_synergy"]
+    rows = []
+    for label, opps in (("Revenue synergy", revenue_opps), ("Cost synergy", cost_opps)):
+        for year_num, pct_attr in enumerate(("year_1_pct", "year_2_pct", "year_3_pct"), start=1):
+            rows.append(
+                {
+                    "year": f"Year {year_num}",
+                    "category": label,
+                    "value": sum(o.estimated_value.base * getattr(o, pct_attr) for o in opps),
+                }
+            )
+    df = pd.DataFrame(rows)
+    if df["value"].sum() == 0:
+        return
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("year:N", title=None),
+            y=alt.Y("value:Q", title="Value creation ($)", axis=alt.Axis(format="$,.2s")),
+            color=alt.Color(
+                "category:N",
+                scale=alt.Scale(domain=["Revenue synergy", "Cost synergy"], range=["#3B7AFF", "#E4572E"]),
+                legend=alt.Legend(title=None, orient="top"),
+            ),
+            tooltip=["year", "category", alt.Tooltip("value:Q", title="Value", format="$,.0f")],
+        )
+        .properties(height=220)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+_RISK_LEVELS = ["low", "medium", "high"]
+_RISK_WEIGHT = {"low": 1, "medium": 2, "high": 3}
+
+
+def _render_risk_heatmap(risks) -> None:
+    """3x3 likelihood x impact risk matrix — the standard consulting risk-register visual.
+    The grid itself is a static score backdrop (green/amber/red); only cells holding at
+    least one risk get a count label, so an empty cell still reads as "low risk here",
+    not as a rendering gap.
+    """
+    grid = pd.DataFrame(
+        [{"likelihood": l, "impact": i, "score": _RISK_WEIGHT[l] * _RISK_WEIGHT[i]} for l in _RISK_LEVELS for i in _RISK_LEVELS]
+    )
+    titles_by_cell: dict[tuple[str, str], list[str]] = {}
+    for r in risks:
+        titles_by_cell.setdefault((r.likelihood.value, r.severity.value), []).append(r.title)
+    grid["count"] = grid.apply(lambda row: len(titles_by_cell.get((row["likelihood"], row["impact"]), [])), axis=1)
+    grid["titles"] = grid.apply(
+        lambda row: "; ".join(titles_by_cell.get((row["likelihood"], row["impact"]), [])) or "No risks in this cell",
+        axis=1,
+    )
+
+    heat = (
+        alt.Chart(grid)
+        .mark_rect(stroke="#0B1220", strokeWidth=2)
+        .encode(
+            x=alt.X("likelihood:N", sort=_RISK_LEVELS, title="Likelihood"),
+            y=alt.Y("impact:N", sort=list(reversed(_RISK_LEVELS)), title="Impact"),
+            color=alt.Color("score:Q", scale=alt.Scale(domain=[1, 9], range=["#1FA971", "#F5A623", "#E5484D"]), legend=None),
+            tooltip=[alt.Tooltip("titles:N", title="Risks"), alt.Tooltip("count:Q", title="Count")],
+        )
+        .properties(width=320, height=320)
+    )
+    labels = (
+        alt.Chart(grid[grid["count"] > 0])
+        .mark_text(color="#0B1220", fontWeight="bold", fontSize=18)
+        .encode(
+            x=alt.X("likelihood:N", sort=_RISK_LEVELS),
+            y=alt.Y("impact:N", sort=list(reversed(_RISK_LEVELS))),
+            text="count:Q",
+        )
+    )
+    st.altair_chart(heat + labels, use_container_width=False)
+
+
 ROLE_LABEL = {AgentRole.STRATEGY: "Strategy Agent", AgentRole.FINANCIAL: "Financial Agent", AgentRole.RED_TEAM: "Red-Team Agent"}
 VERDICT_LABEL = {
     VerdictLevel.PROCEED: "Proceed",
@@ -447,6 +567,12 @@ elif page == "3. Independent Assessments":
             st.session_state.record = record
             save_analysis(record)
 
+    if record.opportunities:
+        st.subheader("3-Year Value Realization")
+        st.caption("When the identified value creation actually lands, revenue vs. cost synergy, aggregated across every opportunity.")
+        _render_ramp_chart(record.opportunities)
+        st.divider()
+
     for assessment in record.agent_assessments:
         with st.chat_message("assistant"):
             st.markdown(f"**{ROLE_LABEL.get(assessment.role, assessment.role.value)}:** {_md(assessment.position)}")
@@ -567,6 +693,10 @@ elif page == "5. Risk Register":
         st.info("Click the button above to identify risks (this also builds the 100-Day Plan and executive summary).")
         st.stop()
 
+    st.subheader("Risk Matrix")
+    _render_risk_heatmap(record.risks)
+    st.divider()
+
     st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
     ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
     st.table(
@@ -609,6 +739,10 @@ elif page == "6. Recommendation":
     verdict = compute_verdict(fresh_review, record.agent_assessments, total_value, record.transaction)
 
     _render_verdict_banner(verdict.level)
+
+    if record.opportunities:
+        st.subheader("Value Creation Bridge")
+        _render_value_waterfall(record.opportunities, total_value)
 
     st.subheader("Why")
     for reason in verdict.reasons:
