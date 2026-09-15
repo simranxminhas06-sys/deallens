@@ -327,8 +327,11 @@ already populated, and the sidebar's "Live deal scorecard" tracks total value
 creation against the original case and the deal's purchase price as you
 adjust any slider.
 
-The sidebar navigation (`st.navigation()`) is grouped into five sections that
-mirror how a deal team actually works, not the order features were built in:
+The navigation (`st.navigation()`) is grouped into five sections that mirror how
+a deal team actually works, not the order features were built in. A "Navigation
+position" control in the sidebar switches between the sidebar (sections listed
+with their pages) and a top bar (sections as dropdown menus) — the `DealLens`
+logo (`st.logo()`) follows automatically in either mode:
 
 **Setup**
 - **Create Analysis**

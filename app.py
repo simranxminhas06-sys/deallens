@@ -929,7 +929,14 @@ def page_tables():
 # ---------------------------------------------------------------- Sidebar: mode + navigation
 # Grouped into sections that follow how a deal team actually works: get set up, analyze,
 # decide, execute and package the deliverable, then appendix material — not build order.
-st.sidebar.title("DealLens")
+# st.logo (not st.sidebar.title) is what actually renders above st.navigation's own widget —
+# Streamlit pins that widget to the top of the sidebar itself, so nothing added via
+# st.sidebar.* can appear above it there.
+st.logo("assets/logo.svg", size="large")
+
+nav_position = st.sidebar.radio(
+    "Navigation position", ["Sidebar", "Top bar"], key="nav_position", horizontal=True
+)
 analysis_mode = st.sidebar.radio("Analysis mode", ["Demo (no API key)", "Live (OpenAI)"], key="analysis_mode")
 is_demo = analysis_mode.startswith("Demo")
 if not is_demo and not os.environ.get("OPENAI_API_KEY"):
@@ -957,7 +964,8 @@ nav = st.navigation(
             st.Page(page_evidence_trail, title="Evidence Trail", icon=":material/link:", url_path="evidence-trail"),
             st.Page(page_tables, title="Tables", icon=":material/table_chart:", url_path="tables"),
         ],
-    }
+    },
+    position="sidebar" if nav_position == "Sidebar" else "top",
 )
 
 with st.sidebar.expander("Saved analyses"):

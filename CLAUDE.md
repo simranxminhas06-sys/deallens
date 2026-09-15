@@ -122,6 +122,15 @@ sidebar near the top — it has to run after any page body that might mutate
   `page_create_analysis()`) is a plain module global read at call time, so it's fine
   that it's assigned later in the file, after the function defs — but it still has to
   be assigned before `nav.run()` actually runs, i.e. before the dict-building code.
+- **`st.navigation()`'s own widget always pins to the top of the sidebar**, regardless
+  of call order relative to other `st.sidebar.*` elements — `st.sidebar.title()` or
+  similar placed anywhere in the script renders *below* it, not above. The only
+  supported way to put branding above the nav widget is `st.logo()`
+  (`assets/logo.svg`), which Streamlit renders in a dedicated slot above the nav in
+  both the sidebar (`position="sidebar"`) and next to the top bar
+  (`position="top"`) — this is also why the app's nav position toggle ("Sidebar" /
+  "Top bar", wired to `st.navigation(..., position=...)`) doesn't need separate logo
+  handling for each mode.
 
 ## Development commands
 
