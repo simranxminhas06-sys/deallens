@@ -711,14 +711,14 @@ DEMO_CASES = [
     {
         "label": "Amazon acquires Whole Foods",
         "subtitle": "E-commerce → grocery retail · $13.7B · 2017",
-        "teaser": "Would you sign off on this one?",
+        "teaser": "A cost-synergy case built on overlapping distribution networks.",
         "run": run_demo_pipeline,
         "document_names": DOCUMENT_NAMES,
     },
     {
         "label": "Pfizer acquires Seagen",
         "subtitle": "Pharma → oncology biotech · $43B · 2023",
-        "teaser": "A very different deal, a very different verdict.",
+        "teaser": "A platform acquisition weighed against retention and regulatory risk.",
         "run": run_pfizer_seagen_pipeline,
         "document_names": PFIZER_SEAGEN_DOCUMENT_NAMES,
     },

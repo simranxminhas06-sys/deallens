@@ -92,10 +92,15 @@ headers in the sidebar.
 10. Tables (every structured table in one place: company profiles, financial
     baseline, opportunities, integration actions, reviewer issues)
 
-The sidebar's "Live deal scorecard" (total value creation, delta vs. original case,
-% of deal value) is rendered at the very end of the script, not with the rest of the
-sidebar near the top — it has to run after any page body that might mutate
+The "Live deal scorecard" (total value creation, delta vs. original case, % of deal
+value) is computed at the very end of the script, not with the rest of the sidebar
+near the top — it has to run after any page body that might mutate
 `record.opportunities` in this same script execution, or it shows a stale value.
+Where it's *displayed* depends on nav position: in "Sidebar" mode the sidebar page
+list is long enough that the scorecard would need scrolling to see, so it renders
+at the top of the main content area instead (via the `scorecard_slot` placeholder
+pattern — see Gotchas); in "Top bar" mode the sidebar is short, so it renders at
+the sidebar's bottom as before.
 
 ## Gotchas already hit once
 
@@ -124,15 +129,31 @@ sidebar near the top — it has to run after any page body that might mutate
   `page_create_analysis()`) is a plain module global read at call time, so it's fine
   that it's assigned later in the file, after the function defs — but it still has to
   be assigned before `nav.run()` actually runs, i.e. before the dict-building code.
-- **`st.navigation()`'s own widget always pins to the top of the sidebar**, regardless
-  of call order relative to other `st.sidebar.*` elements — `st.sidebar.title()` or
-  similar placed anywhere in the script renders *below* it, not above. The only
-  supported way to put branding above the nav widget is `st.logo()`
-  (`assets/logo.svg`), which Streamlit renders in a dedicated slot above the nav in
-  both the sidebar (`position="sidebar"`) and next to the top bar
-  (`position="top"`) — this is also why the app's nav position toggle ("Sidebar" /
-  "Top bar", wired to `st.navigation(..., position=...)`) doesn't need separate logo
-  handling for each mode.
+- **`st.navigation()`'s own widget (`position="sidebar"`) always pins to the top of
+  the sidebar**, regardless of call order relative to other `st.sidebar.*` elements —
+  nothing added via `st.sidebar.*` can render above it there. `st.logo()`
+  (`assets/logo.svg`) is the one thing Streamlit does let you put above it (a
+  dedicated slot, works in both `position="sidebar"` and next to `position="top"`).
+  Because of this, in "Sidebar" nav-position mode the app never uses
+  `position="sidebar"` at all: it calls `st.navigation(NAV_SECTIONS,
+  position="hidden")` (so the automatic widget doesn't draw anything) and instead
+  renders the section headers and `st.sidebar.page_link(page)` for each page itself,
+  in whatever order it wants — that's the only way "Navigation position" and
+  "Analysis mode" end up *above* the page list instead of below it. `st.page_link`
+  accepts the same `st.Page` objects built for the `st.navigation` dict directly.
+- **`position="top"` collapses back into a sidebar-style list on a narrow viewport**
+  (below roughly 900-1000px) — this is Streamlit's own responsive fallback, not a
+  bug, and it's easy to mistake for one: the dropdown pill row simply doesn't
+  render at typical browser-pane widths (~800px), and the page list appears in the
+  sidebar instead, above whatever `st.sidebar.*` content was already there. Always
+  check "Top bar" mode at ≥1400px width before concluding it's broken.
+- **A widget declared early can be filled with data computed later, without moving
+  its visual position** — `scorecard_slot = st.container()` is created *before*
+  `nav.run()` (so it visually sits above the page body in the main area), but its
+  content (the live deal scorecard) is written into it with `with scorecard_slot:`
+  *after* `nav.run()`, once the current page's body has had a chance to mutate
+  `record.opportunities` in this same run. This is how the scorecard can render at
+  the top of the page and still reflect a scenario-slider drag from the same rerun.
 
 ## Development commands
 

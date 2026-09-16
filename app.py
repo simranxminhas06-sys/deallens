@@ -440,11 +440,10 @@ def page_create_analysis():
         cols = st.columns(len(DEMO_CASES), gap="medium")
         for col, case in zip(cols, DEMO_CASES):
             with col:
-                with st.container(border=True):
+                with st.container(border=True, height=260):
                     st.markdown(f"#### {case['label']}")
                     st.caption(case["subtitle"])
                     st.write(case["teaser"])
-                    st.write("")
                     if st.button(
                         "Load this case", key=f"load_demo_{case['label']}", type="primary", use_container_width=True
                     ):
@@ -975,8 +974,10 @@ def page_tables():
 # decide, execute and package the deliverable, then appendix material — not build order.
 # st.logo (not st.sidebar.title) is what actually renders above st.navigation's own widget —
 # Streamlit pins that widget to the top of the sidebar itself, so nothing added via
-# st.sidebar.* can appear above it there — these two selectboxes are the first thing after
-# it, as high as normal sidebar content can go.
+# st.sidebar.* can appear above it there. In "Sidebar" mode we work around this by never
+# letting st.navigation draw its own widget (position="hidden") and instead rendering the
+# page list ourselves with st.page_link, in whatever order we want — which is how the mode
+# and position selectors end up above the page list instead of below it.
 st.logo("assets/logo.svg", size="large")
 
 nav_position = st.sidebar.selectbox("Navigation position", ["Sidebar", "Top bar"], key="nav_position")
@@ -985,31 +986,42 @@ is_demo = analysis_mode.startswith("Demo")
 if not is_demo and not os.environ.get("OPENAI_API_KEY"):
     st.sidebar.warning("OPENAI_API_KEY is not set. Set it in your environment, or switch to Demo mode.")
 
-nav = st.navigation(
-    {
-        "Setup": [
-            st.Page(page_create_analysis, title="Create Analysis", icon=":material/edit_document:", url_path="create-analysis", default=True),
-            st.Page(page_evidence, title="Evidence", icon=":material/fact_check:", url_path="evidence"),
-        ],
-        "Analysis": [
-            st.Page(page_independent_assessments, title="Independent Assessments", icon=":material/forum:", url_path="assessments"),
-            st.Page(page_sensitivity, title="Sensitivity", icon=":material/monitoring:", url_path="sensitivity"),
-            st.Page(page_risk_register, title="Risk Register", icon=":material/warning:", url_path="risk-register"),
-        ],
-        "Decision": [
-            st.Page(page_recommendation, title="Recommendation", icon=":material/gavel:", url_path="recommendation"),
-        ],
-        "Execution & Reporting": [
-            st.Page(page_100_day_plan, title="100-Day Plan", icon=":material/calendar_month:", url_path="100-day-plan"),
-            st.Page(page_executive_summary, title="Executive Summary", icon=":material/summarize:", url_path="executive-summary"),
-        ],
-        "Appendix": [
-            st.Page(page_evidence_trail, title="Evidence Trail", icon=":material/link:", url_path="evidence-trail"),
-            st.Page(page_tables, title="Tables", icon=":material/table_chart:", url_path="tables"),
-        ],
-    },
-    position="sidebar" if nav_position == "Sidebar" else "top",
-)
+NAV_SECTIONS = {
+    "Setup": [
+        st.Page(page_create_analysis, title="Create Analysis", icon=":material/edit_document:", url_path="create-analysis", default=True),
+        st.Page(page_evidence, title="Evidence", icon=":material/fact_check:", url_path="evidence"),
+    ],
+    "Analysis": [
+        st.Page(page_independent_assessments, title="Independent Assessments", icon=":material/forum:", url_path="assessments"),
+        st.Page(page_sensitivity, title="Sensitivity", icon=":material/monitoring:", url_path="sensitivity"),
+        st.Page(page_risk_register, title="Risk Register", icon=":material/warning:", url_path="risk-register"),
+    ],
+    "Decision": [
+        st.Page(page_recommendation, title="Recommendation", icon=":material/gavel:", url_path="recommendation"),
+    ],
+    "Execution & Reporting": [
+        st.Page(page_100_day_plan, title="100-Day Plan", icon=":material/calendar_month:", url_path="100-day-plan"),
+        st.Page(page_executive_summary, title="Executive Summary", icon=":material/summarize:", url_path="executive-summary"),
+    ],
+    "Appendix": [
+        st.Page(page_evidence_trail, title="Evidence Trail", icon=":material/link:", url_path="evidence-trail"),
+        st.Page(page_tables, title="Tables", icon=":material/table_chart:", url_path="tables"),
+    ],
+}
+
+if nav_position == "Sidebar":
+    st.sidebar.divider()
+    for _section, _pages in NAV_SECTIONS.items():
+        st.sidebar.caption(_section)
+        for _p in _pages:
+            st.sidebar.page_link(_p)
+    nav = st.navigation(NAV_SECTIONS, position="hidden")
+    # Reserved here (before nav.run()) so the scorecard renders at the top of the main
+    # content area even though its numbers aren't computed until after the page body runs.
+    scorecard_slot = st.container()
+else:
+    nav = st.navigation(NAV_SECTIONS, position="top")
+    scorecard_slot = None
 
 with st.sidebar.expander("Saved analyses"):
     for row in list_analyses():
@@ -1019,10 +1031,11 @@ with st.sidebar.expander("Saved analyses"):
 
 nav.run()
 
-# ---------------------------------------------------------------- Sidebar: live deal scorecard
-# Placed at the end of the script (not with the rest of the sidebar near the top) so it
-# reflects any scenario-assumption edit made by the page body above, in this same run —
-# Streamlit lets you append to st.sidebar from anywhere in the script.
+# ---------------------------------------------------------------- Live deal scorecard
+# Computed here (not earlier) so it reflects any scenario-assumption edit made by the page
+# body above, in this same run. In "Sidebar" mode it fills the slot reserved at the top of
+# the main content area (the sidebar is too long to see it there without scrolling); in
+# "Top bar" mode the sidebar is short, so it renders at the sidebar's bottom as before.
 if st.session_state.record and st.session_state.record.opportunities:
     _record = st.session_state.record
     _current_total = sum(o.estimated_value.base for o in _record.opportunities)
@@ -1032,20 +1045,33 @@ if st.session_state.record and st.session_state.record.opportunities:
         _original_totals[_record.id] = _current_total
     _original_total = _original_totals[_record.id]
 
-    st.sidebar.divider()
-    st.sidebar.caption("Live deal scorecard")
     _delta = _current_total - _original_total
     _delta_str = None
     if abs(_delta) > 0.01:
         _delta_pct = (_delta / _original_total * 100) if _original_total else 0.0
         _delta_str = f"{_delta:+,.0f} ({_delta_pct:+.1f}%) vs. original"
-    st.sidebar.metric(
-        "Total value creation",
-        f"${_current_total:,.0f}",
-        delta=_delta_str,
-        help="Base case: sum of every opportunity's estimated_value.base.",
-    )
+    _econ = calculate_deal_economics(_current_total, _record.transaction.deal_value) if _record.transaction.deal_value else None
 
-    if _record.transaction.deal_value:
-        _econ = calculate_deal_economics(_current_total, _record.transaction.deal_value)
-        st.sidebar.metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
+    if scorecard_slot is not None:
+        with scorecard_slot:
+            _cols = st.columns(2 if _econ else 1)
+            _cols[0].metric(
+                "Total value creation",
+                f"${_current_total:,.0f}",
+                delta=_delta_str,
+                help="Base case: sum of every opportunity's estimated_value.base.",
+            )
+            if _econ:
+                _cols[1].metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
+            st.divider()
+    else:
+        st.sidebar.divider()
+        st.sidebar.caption("Live deal scorecard")
+        st.sidebar.metric(
+            "Total value creation",
+            f"${_current_total:,.0f}",
+            delta=_delta_str,
+            help="Base case: sum of every opportunity's estimated_value.base.",
+        )
+        if _econ:
+            st.sidebar.metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
