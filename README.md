@@ -39,7 +39,7 @@ doesn't read as tuned to one story:
   Red-Team's objection to the assumed uplift rate is a real, separate basis
   for challenge, landing the verdict on **Proceed with conditions** instead.
 
-The visual theme (white background, blue accent, IBM Plex Sans loaded via
+The visual theme (white background, blue accent, Plus Jakarta Sans loaded via
 Google Fonts) lives in [`.streamlit/config.toml`](.streamlit/config.toml) —
 Streamlit's own theming API, not a CSS override — plus a small, deliberately
 conservative CSS block at the top of `app.py` for the background wash, sidebar,

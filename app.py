@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -125,14 +126,34 @@ def _md(text: str) -> str:
     return text.replace("$", "\\$")
 
 
+def _display_doc_name(name: str) -> str:
+    """Uploaded/fixture document names are file names (e.g. 'target_whole_foods_overview.md') —
+    fine as an internal citation key, but shown to a user it should read like a document title.
+    """
+    stem = re.sub(r"\.(md|pdf|txt|docx?)$", "", name, flags=re.IGNORECASE)
+    return stem.replace("_", " ").replace("-", " ").strip().title()
+
+
+def _pretty_claim_type(claim_type: str) -> str:
+    return claim_type.replace("_", " ").capitalize()
+
+
+def _pretty_stage(stage: str) -> str:
+    head, _, rest = stage.partition(":")
+    head = head.replace("_", " ").capitalize()
+    return f"{head}: {rest}" if rest else head
+
+
 def _evidence_lines(evidence) -> None:
     for e in evidence:
         cite_strs = [
-            f"[{_md(c.source_document)}]({c.source_url})" if c.source_url else f"{_md(c.source_document)} ({c.location})"
+            f"[{_md(_display_doc_name(c.source_document))}]({c.source_url})"
+            if c.source_url
+            else f"{_md(_display_doc_name(c.source_document))} ({c.location})"
             for c in e.citations
         ]
         cites = "; ".join(cite_strs) or "no citation"
-        st.markdown(f"- **[{e.claim_type.value}]** {_md(e.claim)}  \n  _{cites}_")
+        st.markdown(f"- **{_pretty_claim_type(e.claim_type.value)}** — {_md(e.claim)}  \n  _{cites}_")
 
 
 CLAIM_TYPE_COLOR = {
@@ -154,9 +175,9 @@ def _render_evidence_trail(evidence) -> None:
     for e in evidence:
         color = CLAIM_TYPE_COLOR.get(e.claim_type.value, "#6B6B6B")
         cite_html = "; ".join(
-            f'<a href="{html.escape(c.source_url)}">{html.escape(c.source_document)}</a>'
+            f'<a href="{html.escape(c.source_url)}">{html.escape(_display_doc_name(c.source_document))}</a>'
             if c.source_url
-            else f"{html.escape(c.source_document)} ({html.escape(c.location)})"
+            else f"{html.escape(_display_doc_name(c.source_document))} ({html.escape(c.location)})"
             for c in e.citations
         ) or "no citation"
         notes_html = f'<div style="margin-top:4px;color:#888;font-size:0.85em;">Note: {html.escape(e.notes)}</div>' if e.notes else ""
@@ -199,10 +220,7 @@ def _render_scenario_controls(o, key_prefix: str) -> None:
     if not st.toggle("Adjust scenario assumptions", value=True, key=f"{key_prefix}_toggle"):
         return
 
-    st.caption(
-        "Drag an assumption to see the estimate recompute instantly via the real "
-        f"`{o.calculation_method}` function — the same one the Financial Agent called."
-    )
+    st.caption("Drag an assumption to see the estimate recompute instantly — the same calculation the Financial Agent used.")
     updated = {}
     for param, value in o.calculation_inputs.items():
         widget_key = f"{key_prefix}_{param}_{gen}"
@@ -425,8 +443,7 @@ def page_create_analysis():
                 with st.container(border=True):
                     st.markdown(f"#### {case['label']}")
                     st.caption(case["subtitle"])
-                    st.write(case["detail"])
-                    st.markdown(f"**Lands on:** {case['verdict']}")
+                    st.write(case["teaser"])
                     st.write("")
                     if st.button(
                         "Load this case", key=f"load_demo_{case['label']}", type="primary", use_container_width=True
@@ -603,7 +620,7 @@ def page_independent_assessments():
                 for c in assessment.challenges:
                     st.markdown(
                         f"> **Challenge to {ROLE_LABEL.get(c.target_agent, c.target_agent.value)}** "
-                        f"on *“{_md(c.target_claim)}”* [{c.severity.value}]: {_md(c.critique)}"
+                        f"on *“{_md(c.target_claim)}”* ({c.severity.value} severity): {_md(c.critique)}"
                     )
 
     if st.session_state.tool_call_log:
@@ -618,8 +635,8 @@ def page_sensitivity():
     st.caption(
         "Which single assumption moves total value creation the most? Each bar swings just "
         "one assumption to its low/high bound, holding every other assumption at its current "
-        "value, recomputed live via the same financial_calculator functions the Financial "
-        "Agent used — no LLM call, so this is free to explore."
+        "value, recomputed live using the same deterministic calculations the Financial "
+        "Agent used — no AI involved, so this is free to explore."
     )
 
     if not record.opportunities:
@@ -657,11 +674,10 @@ def page_sensitivity():
             st.write(
                 "For each assumption, this swaps only that one value to its low and high "
                 "bound and recomputes that opportunity's base estimate, holding every other "
-                "assumption fixed. A `_base` percentage (e.g. a synergy reduction rate) uses "
-                "the opportunity's own stated low/high; a cost or revenue base or a margin "
-                "with no stated range gets a default ±20% swing. The bar shows the resulting "
-                "swing in total value creation across every opportunity. The dashed line marks "
-                "the current base case."
+                "assumption fixed. A synergy percentage uses the opportunity's own stated "
+                "low/high; a cost or revenue base or a margin with no stated range gets a "
+                "default ±20% swing. The bar shows the resulting swing in total value creation "
+                "across every opportunity. The dashed line marks the current base case."
             )
         st.caption(
             "Changed an assumption on Independent Assessments? This chart reads the same "
@@ -758,13 +774,13 @@ def page_recommendation():
         if fresh_review.citation_coverage_pct is not None:
             st.metric("Citation coverage", f"{fresh_review.citation_coverage_pct:.1f}%")
         for issue in fresh_review.issues:
-            st.markdown(f"- **[{issue.severity.value}] {issue.stage} / {_md(issue.item_title)}** — {_md(issue.problem)}")
+            st.markdown(f"- **{_pretty_stage(issue.stage)} / {_md(issue.item_title)}** ({issue.severity.value} severity) — {_md(issue.problem)}")
 
     st.caption(
         "Rules: 2+ high-severity reviewer issues combined with a high-severity Red-Team "
         "challenge → do not proceed. Any unresolved high-severity reviewer issue, or citation "
         "coverage under 70%, → further diligence. A clean review with a high-severity Red-Team "
-        "challenge → proceed with conditions. Otherwise → proceed. See agent/verdict.py."
+        "challenge → proceed with conditions. Otherwise → proceed."
     )
 
 def page_100_day_plan():
@@ -854,7 +870,7 @@ def page_evidence_trail():
     with st.expander("Claim type legend"):
         legend = [
             ("documented_fact", "directly supported by a citation"),
-            ("calculated_result", "produced by a financial_calculator tool call"),
+            ("calculated_result", "produced by a deterministic calculation, not stated in a document"),
             ("assumption", "explicitly stated, not sourced from a document"),
             ("hypothesis", "requires further diligence — no citation or calculation yet"),
         ]
@@ -902,7 +918,7 @@ def page_tables():
             ramp = calculate_ramp_adjusted_value(o.estimated_value.base, o.year_1_pct, o.year_2_pct, o.year_3_pct, o.cost_to_achieve)
             opp_rows.append({
                 "Opportunity": o.title,
-                "Category": o.category.value,
+                "Category": o.category.value.replace("_", " ").capitalize(),
                 "Low": f"${o.estimated_value.low:,.0f}",
                 "Base": f"${o.estimated_value.base:,.0f}",
                 "High": f"${o.estimated_value.high:,.0f}",
@@ -938,7 +954,7 @@ def page_tables():
                 [
                     {
                         "Severity": i.severity.value,
-                        "Stage": i.stage,
+                        "Stage": _pretty_stage(i.stage),
                         "Item": i.item_title,
                         "Problem": i.problem,
                         "Recommendation": i.recommendation,
@@ -959,13 +975,12 @@ def page_tables():
 # decide, execute and package the deliverable, then appendix material — not build order.
 # st.logo (not st.sidebar.title) is what actually renders above st.navigation's own widget —
 # Streamlit pins that widget to the top of the sidebar itself, so nothing added via
-# st.sidebar.* can appear above it there.
+# st.sidebar.* can appear above it there — these two selectboxes are the first thing after
+# it, as high as normal sidebar content can go.
 st.logo("assets/logo.svg", size="large")
 
-nav_position = st.sidebar.radio(
-    "Navigation position", ["Sidebar", "Top bar"], key="nav_position", horizontal=True
-)
-analysis_mode = st.sidebar.radio("Analysis mode", ["Demo (no API key)", "Live (OpenAI)"], key="analysis_mode")
+nav_position = st.sidebar.selectbox("Navigation position", ["Sidebar", "Top bar"], key="nav_position")
+analysis_mode = st.sidebar.selectbox("Analysis mode", ["Demo (no API key)", "Live (OpenAI)"], key="analysis_mode")
 is_demo = analysis_mode.startswith("Demo")
 if not is_demo and not os.environ.get("OPENAI_API_KEY"):
     st.sidebar.warning("OPENAI_API_KEY is not set. Set it in your environment, or switch to Demo mode.")

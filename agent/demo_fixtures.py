@@ -711,16 +711,14 @@ DEMO_CASES = [
     {
         "label": "Amazon acquires Whole Foods",
         "subtitle": "E-commerce → grocery retail · $13.7B · 2017",
-        "detail": "The revenue-synergy opportunity has no citation, so the reviewer catches it on its own.",
-        "verdict": "Further diligence required",
+        "teaser": "Would you sign off on this one?",
         "run": run_demo_pipeline,
         "document_names": DOCUMENT_NAMES,
     },
     {
         "label": "Pfizer acquires Seagen",
         "subtitle": "Pharma → oncology biotech · $43B · 2023",
-        "detail": "Its weak opportunity is cited, so review passes clean — Red-Team challenges the assumed uplift rate instead.",
-        "verdict": "Proceed with conditions",
+        "teaser": "A very different deal, a very different verdict.",
         "run": run_pfizer_seagen_pipeline,
         "document_names": PFIZER_SEAGEN_DOCUMENT_NAMES,
     },

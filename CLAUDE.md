@@ -53,8 +53,9 @@ Pfizer/Seagen, deliberately different industries and verdict outcomes, see
 - `db/database.py` — SQLite persistence for "Saved analyses". `save_analysis()`
   mutates `record.id` in place on first save so later saves update instead of
   inserting — see Gotchas.
-- `.streamlit/config.toml` — the theme (white background, blue accent, IBM Plex
-  Sans via Google Fonts). This directory must stay tracked in git (see Gotchas).
+- `.streamlit/config.toml` — the theme (white background, blue accent, Plus
+  Jakarta Sans via Google Fonts). This directory must stay tracked in git (see
+  Gotchas).
 
 ## Current workflow order (app.py page list)
 
