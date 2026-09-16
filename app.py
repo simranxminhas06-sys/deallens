@@ -42,7 +42,7 @@ st.markdown(
         font-size: 1.5rem;
         font-weight: 800;
         letter-spacing: -0.01em;
-        background: linear-gradient(90deg, #3B7AFF, #7FB0FF);
+        background: linear-gradient(90deg, #3D5AFE, #00C2FF);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.25rem;
@@ -50,8 +50,8 @@ st.markdown(
     h1 { letter-spacing: -0.015em; }
     h2, h3 { letter-spacing: -0.01em; }
     [data-testid="stMetric"] {
-        background: rgba(59, 122, 255, 0.08);
-        border: 1px solid rgba(59, 122, 255, 0.28);
+        background: rgba(61, 90, 254, 0.14);
+        border: 1px solid rgba(61, 90, 254, 0.55);
         border-radius: 10px;
         padding: 0.75rem 1rem;
     }
@@ -113,10 +113,10 @@ def _evidence_lines(evidence) -> None:
 
 
 CLAIM_TYPE_COLOR = {
-    "documented_fact": "#1B7A3D",
-    "calculated_result": "#1565C0",
-    "assumption": "#B5670A",
-    "hypothesis": "#6B6B6B",
+    "documented_fact": "#0FA968",
+    "calculated_result": "#2170E8",
+    "assumption": "#E0870A",
+    "hypothesis": "#6B7280",
 }
 
 
@@ -228,7 +228,7 @@ def _render_tornado_chart(rows: list[dict], total_base: float, max_rows: int = 8
     order = df["label"].tolist()
     bars = (
         alt.Chart(df)
-        .mark_bar(size=18, color="#E4572E")
+        .mark_bar(size=18, color="#FF6B35")
         .encode(
             y=alt.Y("label:N", sort=order, title=None, axis=alt.Axis(labelLimit=240)),
             x=alt.X("total_low:Q", title="Total value creation ($)", axis=alt.Axis(format="$,.2s")),
@@ -273,7 +273,7 @@ def _render_value_waterfall(opportunities, total_value: float) -> None:
             y2="end:Q",
             color=alt.Color(
                 "kind:N",
-                scale=alt.Scale(domain=["Component", "Total"], range=["#3B7AFF", "#1FA971"]),
+                scale=alt.Scale(domain=["Component", "Total"], range=["#3D5AFE", "#00D084"]),
                 legend=None,
             ),
             tooltip=[alt.Tooltip("stage:N", title="Stage"), alt.Tooltip("amount:Q", title="Amount", format="$,.0f")],
@@ -314,7 +314,7 @@ def _render_ramp_chart(opportunities) -> None:
             y=alt.Y("value:Q", title="Value creation ($)", axis=alt.Axis(format="$,.2s")),
             color=alt.Color(
                 "category:N",
-                scale=alt.Scale(domain=["Revenue synergy", "Cost synergy"], range=["#3B7AFF", "#E4572E"]),
+                scale=alt.Scale(domain=["Revenue synergy", "Cost synergy"], range=["#3D5AFE", "#FF6B35"]),
                 legend=alt.Legend(title=None, orient="top"),
             ),
             tooltip=["year", "category", alt.Tooltip("value:Q", title="Value", format="$,.0f")],
@@ -352,7 +352,7 @@ def _render_risk_heatmap(risks) -> None:
         .encode(
             x=alt.X("likelihood:N", sort=_RISK_LEVELS, title="Likelihood"),
             y=alt.Y("impact:N", sort=list(reversed(_RISK_LEVELS)), title="Impact"),
-            color=alt.Color("score:Q", scale=alt.Scale(domain=[1, 9], range=["#1FA971", "#F5A623", "#E5484D"]), legend=None),
+            color=alt.Color("score:Q", scale=alt.Scale(domain=[1, 9], range=["#00D084", "#FFB800", "#FF3B3B"]), legend=None),
             tooltip=[alt.Tooltip("titles:N", title="Risks"), alt.Tooltip("count:Q", title="Count")],
         )
         .properties(width=320, height=320)
@@ -377,10 +377,10 @@ VERDICT_LABEL = {
     VerdictLevel.DO_NOT_PROCEED: "Do not proceed",
 }
 VERDICT_COLOR = {
-    VerdictLevel.PROCEED: "#1FA971",
-    VerdictLevel.PROCEED_WITH_CONDITIONS: "#F5A623",
-    VerdictLevel.FURTHER_DILIGENCE: "#8B6BF2",
-    VerdictLevel.DO_NOT_PROCEED: "#E5484D",
+    VerdictLevel.PROCEED: "#00D084",
+    VerdictLevel.PROCEED_WITH_CONDITIONS: "#FFB800",
+    VerdictLevel.FURTHER_DILIGENCE: "#8C5CFF",
+    VerdictLevel.DO_NOT_PROCEED: "#FF3B3B",
 }
 
 

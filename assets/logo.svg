@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" width="220" height="48">
   <defs>
     <linearGradient id="dealLensGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#3B7AFF"/>
-      <stop offset="100%" stop-color="#7FB0FF"/>
+      <stop offset="0%" stop-color="#3D5AFE"/>
+      <stop offset="100%" stop-color="#00C2FF"/>
     </linearGradient>
   </defs>
   <text x="0" y="34" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"

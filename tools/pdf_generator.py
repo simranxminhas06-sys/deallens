@@ -21,15 +21,15 @@ from schemas.analysis_models import AnalysisRecord, EvidenceItem
 from tools.financial_calculator import calculate_deal_economics, calculate_ramp_adjusted_value
 
 NAVY = colors.HexColor("#1B2A4A")
-ACCENT = colors.HexColor("#3B7AFF")
+ACCENT = colors.HexColor("#3D5AFE")
 LIGHT_GRAY = colors.HexColor("#F2F4F7")
 VERDICT_TEXT = colors.HexColor("#0B1220")
 
 VERDICT_COLOR = {
-    "proceed": colors.HexColor("#1FA971"),
-    "proceed_with_conditions": colors.HexColor("#F5A623"),
-    "further_diligence": colors.HexColor("#8B6BF2"),
-    "do_not_proceed": colors.HexColor("#E5484D"),
+    "proceed": colors.HexColor("#00D084"),
+    "proceed_with_conditions": colors.HexColor("#FFB800"),
+    "further_diligence": colors.HexColor("#8C5CFF"),
+    "do_not_proceed": colors.HexColor("#FF3B3B"),
 }
 
 VERDICT_LABEL = {
