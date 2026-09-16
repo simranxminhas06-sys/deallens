@@ -96,11 +96,12 @@ The "Live deal scorecard" (total value creation, delta vs. original case, % of d
 value) is computed at the very end of the script, not with the rest of the sidebar
 near the top — it has to run after any page body that might mutate
 `record.opportunities` in this same script execution, or it shows a stale value.
-Where it's *displayed* depends on nav position: in "Sidebar" mode the sidebar page
-list is long enough that the scorecard would need scrolling to see, so it renders
-at the top of the main content area instead (via the `scorecard_slot` placeholder
-pattern — see Gotchas); in "Top bar" mode the sidebar is short, so it renders at
-the sidebar's bottom as before.
+Where it's *displayed* depends on nav position: in "Sidebar" mode it fills a slot
+reserved above the page list (via the `scorecard_slot` placeholder pattern — see
+Gotchas) — the sidebar is a separately-scrolling panel, so putting it above the
+long page list, rather than below, is what keeps it visible regardless of how far
+the main content is scrolled, no CSS required. In "Top bar" mode there's no page
+list competing for space in the sidebar, so it's appended at the bottom as before.
 
 ## Gotchas already hit once
 
@@ -148,12 +149,23 @@ the sidebar's bottom as before.
   sidebar instead, above whatever `st.sidebar.*` content was already there. Always
   check "Top bar" mode at ≥1400px width before concluding it's broken.
 - **A widget declared early can be filled with data computed later, without moving
-  its visual position** — `scorecard_slot = st.container()` is created *before*
-  `nav.run()` (so it visually sits above the page body in the main area), but its
-  content (the live deal scorecard) is written into it with `with scorecard_slot:`
-  *after* `nav.run()`, once the current page's body has had a chance to mutate
-  `record.opportunities` in this same run. This is how the scorecard can render at
-  the top of the page and still reflect a scenario-slider drag from the same rerun.
+  its visual position** — `scorecard_slot = st.sidebar.container()` is created
+  *before* the page-links loop and `nav.run()` (so it visually sits above the page
+  list), but its content (the live deal scorecard) is written into it with
+  `with scorecard_slot:` *after* `nav.run()`, once the current page's body has had a
+  chance to mutate `record.opportunities` in this same run. This is how the
+  scorecard can render above the page list and still reflect a scenario-slider drag
+  from the same rerun.
+- **`position: sticky` on a `stVerticalBlock` did not work when tried** (to pin the
+  scorecard to the top of the *main* content area while it scrolled underneath) —
+  `getComputedStyle` confirmed `position: sticky` was applied and no ancestor up to
+  the scrolling container (`[data-testid="stMain"]`, `overflow-y: auto`) had
+  `overflow` other than `visible`, yet the element scrolled away like a normal
+  block. Root cause not identified (something about Streamlit's own scroll/rerender
+  handling). Don't spend time re-attempting sticky/fixed positioning in the main
+  content area for this — the sidebar placement above solves the actual "stay
+  visible while scrolling" requirement more simply anyway, since the sidebar is
+  already a separate, non-scrolling-with-main-content panel.
 
 ## Development commands
 

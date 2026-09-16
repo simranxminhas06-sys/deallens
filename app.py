@@ -1010,15 +1010,18 @@ NAV_SECTIONS = {
 }
 
 if nav_position == "Sidebar":
+    # Reserved here, above the page list (before nav.run()), so the scorecard renders at
+    # the top of the sidebar even though its numbers aren't computed until after the page
+    # body runs. The sidebar is Streamlit's own separately-scrolling panel — placing it
+    # here (rather than lower, past a long page list) is what keeps it visible regardless
+    # of how far the main content is scrolled, with no custom CSS/JS needed.
+    scorecard_slot = st.sidebar.container()
     st.sidebar.divider()
     for _section, _pages in NAV_SECTIONS.items():
         st.sidebar.caption(_section)
         for _p in _pages:
             st.sidebar.page_link(_p)
     nav = st.navigation(NAV_SECTIONS, position="hidden")
-    # Reserved here (before nav.run()) so the scorecard renders at the top of the main
-    # content area even though its numbers aren't computed until after the page body runs.
-    scorecard_slot = st.container()
 else:
     nav = st.navigation(NAV_SECTIONS, position="top")
     scorecard_slot = None
@@ -1033,9 +1036,9 @@ nav.run()
 
 # ---------------------------------------------------------------- Live deal scorecard
 # Computed here (not earlier) so it reflects any scenario-assumption edit made by the page
-# body above, in this same run. In "Sidebar" mode it fills the slot reserved at the top of
-# the main content area (the sidebar is too long to see it there without scrolling); in
-# "Top bar" mode the sidebar is short, so it renders at the sidebar's bottom as before.
+# body above, in this same run. In "Sidebar" mode it fills the slot reserved above the page
+# list (so it's visible without scrolling the long list); in "Top bar" mode there's no page
+# list in the sidebar to compete with, so it's appended at the sidebar's bottom as before.
 if st.session_state.record and st.session_state.record.opportunities:
     _record = st.session_state.record
     _current_total = sum(o.estimated_value.base for o in _record.opportunities)
@@ -1054,15 +1057,15 @@ if st.session_state.record and st.session_state.record.opportunities:
 
     if scorecard_slot is not None:
         with scorecard_slot:
-            _cols = st.columns(2 if _econ else 1)
-            _cols[0].metric(
+            st.caption("Live deal scorecard")
+            st.metric(
                 "Total value creation",
                 f"${_current_total:,.0f}",
                 delta=_delta_str,
                 help="Base case: sum of every opportunity's estimated_value.base.",
             )
             if _econ:
-                _cols[1].metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
+                st.metric("% of deal value", f"{_econ['value_creation_pct_of_deal']:.2f}%")
             st.divider()
     else:
         st.sidebar.divider()
