@@ -295,21 +295,41 @@ def _render_tornado_chart(rows: list[dict], total_base: float, max_rows: int = 8
     st.altair_chart((bars + base_rule).properties(height=32 * len(top_rows) + 20), use_container_width=True)
 
 
+_CATEGORY_LABELS = {
+    "revenue_synergy": "Revenue synergy",
+    "cost_synergy": "Cost synergy",
+    "dis_synergy": "Dis-synergy",
+}
+
+
 def _render_value_waterfall(opportunities, total_value: float) -> None:
-    """Cost synergies + revenue synergies bridging to total value creation — the classic
-    banking/consulting bridge chart, built from the same opportunity values shown everywhere
-    else (no separate calculation), so it can't drift from the numbers driving the verdict.
+    """Cost synergies + revenue synergies (+ dis-synergies, if any) bridging to total value
+    creation — the classic banking/consulting bridge chart, built from the same opportunity
+    values shown everywhere else (no separate calculation), so it can't drift from the numbers
+    driving the verdict.
     """
     cost_total = sum(o.estimated_value.base for o in opportunities if o.category.value == "cost_synergy")
     revenue_total = sum(o.estimated_value.base for o in opportunities if o.category.value == "revenue_synergy")
-    stages = ["Cost synergies", "Revenue synergies", "Total value creation"]
-    df = pd.DataFrame(
-        [
-            {"stage": stages[0], "start": 0, "end": cost_total, "amount": cost_total, "kind": "Component"},
-            {"stage": stages[1], "start": cost_total, "end": total_value, "amount": revenue_total, "kind": "Component"},
-            {"stage": stages[2], "start": 0, "end": total_value, "amount": total_value, "kind": "Total"},
-        ]
-    )
+    dis_synergy_total = sum(o.estimated_value.base for o in opportunities if o.category.value == "dis_synergy")
+
+    rows = [
+        {"stage": "Cost synergies", "start": 0, "end": cost_total, "amount": cost_total, "kind": "Component"},
+        {"stage": "Revenue synergies", "start": cost_total, "end": cost_total + revenue_total, "amount": revenue_total, "kind": "Component"},
+    ]
+    running = cost_total + revenue_total
+    if dis_synergy_total != 0:
+        rows.append(
+            {
+                "stage": "Dis-synergies",
+                "start": running,
+                "end": running + dis_synergy_total,
+                "amount": dis_synergy_total,
+                "kind": "Component",
+            }
+        )
+    rows.append({"stage": "Total value creation", "start": 0, "end": total_value, "amount": total_value, "kind": "Total"})
+    stages = [r["stage"] for r in rows]
+    df = pd.DataFrame(rows)
     bars = (
         alt.Chart(df)
         .mark_bar(size=60)
@@ -334,13 +354,19 @@ def _render_value_waterfall(opportunities, total_value: float) -> None:
 
 
 def _render_ramp_chart(opportunities) -> None:
-    """Aggregate 3-year value realization, revenue vs. cost synergy, stacked per year — shows
-    when the identified value creation actually lands, not just its final total.
+    """Aggregate 3-year value realization, revenue/cost synergy vs. dis-synergy, stacked per
+    year — shows when the identified value creation (and destruction) actually lands, not just
+    its final total.
     """
     revenue_opps = [o for o in opportunities if o.category.value == "revenue_synergy"]
     cost_opps = [o for o in opportunities if o.category.value == "cost_synergy"]
+    dis_synergy_opps = [o for o in opportunities if o.category.value == "dis_synergy"]
     rows = []
-    for label, opps in (("Revenue synergy", revenue_opps), ("Cost synergy", cost_opps)):
+    for label, opps in (
+        ("Revenue synergy", revenue_opps),
+        ("Cost synergy", cost_opps),
+        ("Dis-synergy", dis_synergy_opps),
+    ):
         for year_num, pct_attr in enumerate(("year_1_pct", "year_2_pct", "year_3_pct"), start=1):
             rows.append(
                 {
@@ -350,7 +376,7 @@ def _render_ramp_chart(opportunities) -> None:
                 }
             )
     df = pd.DataFrame(rows)
-    if df["value"].sum() == 0:
+    if (df["value"] == 0).all():
         return
     chart = (
         alt.Chart(df)
@@ -360,7 +386,10 @@ def _render_ramp_chart(opportunities) -> None:
             y=alt.Y("value:Q", title="Value creation ($)", axis=alt.Axis(format="$,.2s")),
             color=alt.Color(
                 "category:N",
-                scale=alt.Scale(domain=["Revenue synergy", "Cost synergy"], range=["#3D5AFE", "#FF6B35"]),
+                scale=alt.Scale(
+                    domain=["Revenue synergy", "Cost synergy", "Dis-synergy"],
+                    range=["#3D5AFE", "#FF6B35", "#E05A5A"],
+                ),
                 legend=alt.Legend(title=None, orient="top"),
             ),
             tooltip=["year", "category", alt.Tooltip("value:Q", title="Value", format="$,.0f")],
@@ -756,7 +785,7 @@ def page_risk_register():
     _render_risk_heatmap(record.risks)
     st.divider()
 
-    st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first.")
+    st.caption("Sorted by risk score (likelihood × impact, 1-9), highest first. Expand a risk below for the full explanation, mitigation, and contingency.")
     ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
     st.table(
         [
@@ -766,15 +795,28 @@ def page_risk_register():
                 "Likelihood": r.likelihood.value,
                 "Impact": r.severity.value,
                 "Score": r.score,
-                "Mitigation": r.mitigation,
             }
             for r in ranked_risks
         ]
     )
 
     for r in ranked_risks:
-        if r.evidence:
-            with st.expander(f"Evidence: {r.title}"):
+        with st.expander(f"{r.title} — score {r.score} ({r.likelihood.value} likelihood × {r.severity.value} impact)"):
+            st.markdown(_md(r.description))
+            rationale_cols = st.columns(2)
+            if r.likelihood_rationale:
+                rationale_cols[0].markdown(f"**Why {r.likelihood.value} likelihood:** {_md(r.likelihood_rationale)}")
+            if r.severity_rationale:
+                rationale_cols[1].markdown(f"**Why {r.severity.value} impact:** {_md(r.severity_rationale)}")
+            st.markdown(f"**Mitigation (preventive):** {_md(r.mitigation)}")
+            if r.contingency:
+                st.markdown(f"**Contingency (if it happens anyway):** {_md(r.contingency)}")
+            if r.early_warning_indicator:
+                st.markdown(f"**Early warning indicator:** {_md(r.early_warning_indicator)}")
+            if r.owner_role:
+                st.caption(f"Owner: {r.owner_role}")
+            if r.evidence:
+                st.markdown("**Evidence:**")
                 _evidence_lines(r.evidence)
 
 def page_recommendation():
@@ -1010,7 +1052,7 @@ def page_tables():
             ramp = calculate_ramp_adjusted_value(o.estimated_value.base, o.year_1_pct, o.year_2_pct, o.year_3_pct, o.cost_to_achieve)
             opp_rows.append({
                 "Opportunity": o.title,
-                "Category": o.category.value.replace("_", " ").capitalize(),
+                "Category": _CATEGORY_LABELS.get(o.category.value, o.category.value.replace("_", " ").capitalize()),
                 "Low": f"${o.estimated_value.low:,.0f}",
                 "Base": f"${o.estimated_value.base:,.0f}",
                 "High": f"${o.estimated_value.high:,.0f}",

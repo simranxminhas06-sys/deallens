@@ -85,6 +85,43 @@ def calculate_revenue_scenario(
     }
 
 
+def calculate_dis_synergy_scenario(
+    baseline_revenue: float,
+    attrition_pct_low: float,
+    attrition_pct_base: float,
+    attrition_pct_high: float,
+    margin_pct: float = 1.0,
+) -> dict:
+    """Low/base/high value DESTROYED by customer/revenue attrition following the deal — the
+    downside counterpart to calculate_revenue_scenario that a rigorous synergy case nets
+    against the upside, instead of only ever showing gains.
+
+    attrition_pct_low/base/high are plain percentages (the smallest, most likely, and largest
+    attrition rate an analyst would actually estimate — attrition_pct_low is the least attrition,
+    attrition_pct_high the most). The returned dollars are negative, and — because more attrition
+    is worse, the opposite of calculate_revenue_scenario's uplift_pct — the WORST case (computed
+    from attrition_pct_high) is reported as 'low' and the BEST case (from attrition_pct_low) as
+    'high', so 'low' <= 'base' <= 'high' still holds numerically like every other scenario here.
+    """
+    for pct, name in (
+        (attrition_pct_low, "attrition_pct_low"),
+        (attrition_pct_base, "attrition_pct_base"),
+        (attrition_pct_high, "attrition_pct_high"),
+    ):
+        if not 0 <= pct <= 1:
+            raise ValueError(f"{name} must be between 0 and 1")
+    if not 0 <= margin_pct <= 1:
+        raise ValueError("margin_pct must be between 0 and 1")
+    return {
+        "low": -round(baseline_revenue * attrition_pct_high * margin_pct, 2),
+        "base": -round(baseline_revenue * attrition_pct_base * margin_pct, 2),
+        "high": -round(baseline_revenue * attrition_pct_low * margin_pct, 2),
+        "baseline_revenue": baseline_revenue,
+        "margin_pct": margin_pct,
+        "method": "value_destroyed = -(baseline_revenue * attrition_pct * margin_pct); low uses attrition_pct_high (worst case), high uses attrition_pct_low (best case)",
+    }
+
+
 def calculate_combined_metric(acquirer_value: float, target_value: float, adjustment_pct: float = 0.0) -> dict:
     """Pro-forma combined metric (e.g. combined revenue) with an optional dis-synergy/synergy adjustment."""
     combined = (acquirer_value + target_value) * (1 + adjustment_pct)
@@ -314,6 +351,32 @@ FUNCTION_SCHEMAS = [
             "additionalProperties": False,
         },
     },
+    {
+        "type": "function",
+        "name": "calculate_dis_synergy_scenario",
+        "description": (
+            "Compute low/base/high negative dollar value destroyed by customer/revenue attrition "
+            "following the deal — the downside counterpart to calculate_revenue_scenario."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "baseline_revenue": {"type": "number"},
+                "attrition_pct_low": {"type": "number", "description": "Least-attrition case, 0-1"},
+                "attrition_pct_base": {"type": "number", "description": "Most likely attrition case, 0-1"},
+                "attrition_pct_high": {"type": "number", "description": "Worst-case attrition, 0-1"},
+                "margin_pct": {"type": "number", "description": "Converts revenue at risk into profit at risk"},
+            },
+            "required": [
+                "baseline_revenue",
+                "attrition_pct_low",
+                "attrition_pct_base",
+                "attrition_pct_high",
+                "margin_pct",
+            ],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -322,4 +385,5 @@ TOOL_FUNCTIONS = {
     "calculate_savings_scenario": calculate_savings_scenario,
     "calculate_revenue_scenario": calculate_revenue_scenario,
     "calculate_combined_metric": calculate_combined_metric,
+    "calculate_dis_synergy_scenario": calculate_dis_synergy_scenario,
 }

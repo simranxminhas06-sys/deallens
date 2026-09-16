@@ -39,6 +39,7 @@ from schemas.analysis_models import (
 )
 from tools.financial_calculator import (
     calculate_combined_metric,
+    calculate_dis_synergy_scenario,
     calculate_growth_rate,
     calculate_margin,
     calculate_revenue_scenario,
@@ -214,6 +215,42 @@ def _revenue_opportunity() -> tuple[ValueOpportunity, dict]:
     return opp, tool_call
 
 
+def _dis_synergy_opportunity() -> tuple[ValueOpportunity, dict]:
+    calc_inputs = {
+        "baseline_revenue": 15_700_000_000,
+        "attrition_pct_low": 0.005,
+        "attrition_pct_base": 0.01,
+        "attrition_pct_high": 0.02,
+        "margin_pct": 0.043,
+    }
+    calc = calculate_dis_synergy_scenario(**calc_inputs)
+    opp = ValueOpportunity(
+        title="Customer attrition from repositioning toward Amazon's value pricing",
+        category=Category.DIS_SYNERGY,
+        rationale="Whole Foods' premium-pricing perception is already cited as a factor limiting its customer base, and comparable-sales have been softening; a repositioning toward Amazon's lower-price value proposition risks alienating existing premium-loyalty shoppers faster than it attracts new price-sensitive ones.",
+        evidence=[
+            EvidenceItem(
+                claim="Premium pricing perception is cited as a factor limiting Whole Foods' customer base in a category increasingly sensitive to price, alongside multiple consecutive quarters of comparable-sales softness.",
+                claim_type=ClaimType.DOCUMENTED_FACT,
+                citations=[Citation(source_document="target_whole_foods_overview.md", location="Section 4: Risk Factors")],
+            )
+        ],
+        estimated_value=EstimatedValue(low=calc["low"], base=calc["base"], high=calc["high"]),
+        assumptions=["Whole Foods FY2016 revenue base of ~$15.7B", "0.5-2.0% of revenue at risk from premium-customer attrition during repositioning", "Applied at Whole Foods' 4.3% operating margin"],
+        implementation_difficulty=Difficulty.MEDIUM,
+        time_horizon="0-12 months",
+        key_risks=["Repositioning too aggressively before price-sensitive demand materializes", "No pilot data yet on actual attrition rate"],
+        calculation_method="calculate_dis_synergy_scenario",
+        calculation_inputs=calc_inputs,
+        cost_to_achieve=0.0,
+        year_1_pct=1.0,
+        year_2_pct=0.6,
+        year_3_pct=0.3,
+    )
+    tool_call = {"name": "calculate_dis_synergy_scenario", "arguments": calc_inputs, "result": calc}
+    return opp, tool_call
+
+
 def _financial_assessment() -> tuple[AgentAssessment, list[dict], list[FinancialBaseline]]:
     combined = calculate_combined_metric(136_000_000_000, 15_700_000_000, adjustment_pct=0.0)
     baselines = [
@@ -223,6 +260,7 @@ def _financial_assessment() -> tuple[AgentAssessment, list[dict], list[Financial
     ]
     cost_opp, cost_call = _cost_opportunity()
     revenue_opp, revenue_call = _revenue_opportunity()
+    dis_synergy_opp, dis_synergy_call = _dis_synergy_opportunity()
     assessment = AgentAssessment(
         role=AgentRole.FINANCIAL,
         position=(
@@ -231,7 +269,10 @@ def _financial_assessment() -> tuple[AgentAssessment, list[dict], list[Financial
             "The revenue opportunity is plausible — Amazon's Prime base is real and large — but there "
             "is insufficient evidence to support the proposed $12 million estimate. No pilot or "
             "attach-rate data exists yet; this should be tracked as a hypothesis, not a base-case "
-            "number, until a real test is run."
+            "number, until a real test is run. A rigorous case also has to net the upside against a "
+            "dis-synergy: Whole Foods' own disclosed risk factors flag premium-pricing sensitivity, "
+            "so repositioning toward Amazon's value pricing carries a real customer-attrition cost, "
+            "not just a customer-acquisition opportunity."
         ),
         key_findings=[
             EvidenceItem(
@@ -240,20 +281,22 @@ def _financial_assessment() -> tuple[AgentAssessment, list[dict], list[Financial
                 notes=combined["method"],
             )
         ],
-        opportunities=[cost_opp, revenue_opp],
+        opportunities=[cost_opp, revenue_opp, dis_synergy_opp],
     )
-    return assessment, [cost_call, revenue_call], baselines
+    return assessment, [cost_call, revenue_call, dis_synergy_call], baselines
 
 
 def _red_team_assessment(financial_opps: list[ValueOpportunity]) -> AgentAssessment:
     return AgentAssessment(
         role=AgentRole.RED_TEAM,
         position=(
-            "The analysis ignores brand cannibalization and integration costs. Whole Foods' premium "
-            "positioning depends on being perceived as different from a discount retailer — an "
+            "The revenue-synergy estimate has no supporting citation and should not be treated as "
+            "a base case. The dis-synergy line item is the right instinct — Whole Foods' premium "
+            "positioning depends on being perceived as different from a discount retailer, and an "
             "aggressive Prime-linked delivery push risks accelerating exactly the price-sensitive "
-            "shift that was already eroding comparable sales before the deal. The revenue-synergy "
-            "estimate has no supporting citation and should not be treated as a base case."
+            "shift that was already eroding comparable sales before the deal — but its 0.5-2.0% "
+            "attrition range is itself an unvalidated assumption, the same evidence gap as the "
+            "revenue opportunity it's meant to offset."
         ),
         challenges=[
             Challenge(
@@ -261,6 +304,12 @@ def _red_team_assessment(financial_opps: list[ValueOpportunity]) -> AgentAssessm
                 target_claim="Cross-sell Amazon Prime members into Whole Foods grocery delivery",
                 critique="No cited evidence supports the assumed 1-2% uplift rate; treat as a hypothesis pending a real pilot, not a scenario ready for approval.",
                 severity=RiskSeverity.HIGH,
+            ),
+            Challenge(
+                target_agent=AgentRole.FINANCIAL,
+                target_claim="Customer attrition from repositioning toward Amazon's value pricing",
+                critique="The 0.5-2.0% attrition range is asserted, not measured — no comparable repositioning case or pilot data backs the specific rate, the same gap as the revenue opportunity it offsets.",
+                severity=RiskSeverity.MEDIUM,
             ),
             Challenge(
                 target_agent=AgentRole.STRATEGY,
@@ -298,7 +347,12 @@ def _risks() -> list[Risk]:
             category="cultural",
             severity=RiskSeverity.HIGH,
             likelihood=RiskSeverity.HIGH,
+            severity_rationale="Store-level culture directly drives the in-store experience Whole Foods' premium positioning depends on; a bad cutover risks visible service degradation, not just an internal process hiccup.",
+            likelihood_rationale="The two operating models are described as differing materially, not just in degree — centralized/metrics-driven vs. decentralized/team-based is a structural mismatch, not a minor process gap.",
             mitigation="Retain Whole Foods store-level leadership through year one; phase in centralized systems rather than a single cutover.",
+            contingency="If attrition among store leadership exceeds plan despite retention offers, pause further centralized-systems rollout in the affected region and stabilize with existing staff before resuming.",
+            early_warning_indicator="Store-level leadership voluntary turnover rate in the first two quarters post-close, tracked against the pre-deal baseline.",
+            owner_role="VP Store Operations Integration",
             evidence=[
                 EvidenceItem(
                     claim="Whole Foods operates a largely non-unionized, decentralized team-based store model.",
@@ -313,7 +367,12 @@ def _risks() -> list[Risk]:
             category="customer",
             severity=RiskSeverity.MEDIUM,
             likelihood=RiskSeverity.MEDIUM,
+            severity_rationale="Brand positioning is the basis for Whole Foods' pricing power; eroding it doesn't just cost the promotion's price, it can permanently reset customer price expectations.",
+            likelihood_rationale="Comparable-sales pressure ahead of the deal creates real incentive to discount quickly, before pilot data confirms it's safe to do so.",
             mitigation="Pilot pricing/promotion changes in a limited set of stores before a full rollout.",
+            contingency="If a pilot shows comparable-sales decline beyond the pre-deal baseline trend, halt rollout and revert pricing in piloted stores rather than pushing through to the full rollout on schedule.",
+            early_warning_indicator="Comparable-store sales and average basket size in piloted stores, tracked weekly against non-piloted stores.",
+            owner_role="VP Merchandising",
         ),
     ]
 
@@ -507,6 +566,43 @@ def _seagen_revenue_opportunity() -> tuple[ValueOpportunity, dict]:
     return opp, tool_call
 
 
+def _seagen_dis_synergy_opportunity() -> tuple[ValueOpportunity, dict]:
+    calc_inputs = {
+        "baseline_revenue": 2_000_000_000,
+        "attrition_pct_low": 0.015,
+        "attrition_pct_base": 0.03,
+        "attrition_pct_high": 0.05,
+        "margin_pct": 1.0,
+    }
+    calc = calculate_dis_synergy_scenario(**calc_inputs)
+    opp = ValueOpportunity(
+        title="Pipeline disruption from key ADC scientist and clinical-leader attrition",
+        category=Category.DIS_SYNERGY,
+        rationale="Seagen's ADC platform value depends on retaining the scientific and clinical leadership that built it; M&A-driven uncertainty risks accelerating exactly this attrition before retention packages are locked in, delaying or degrading near-term pipeline revenue.",
+        evidence=[
+            EvidenceItem(
+                claim="Seagen's ADC platform is the basis for its approved therapies and its earlier-stage pipeline alike, making the underlying R&D organization, not just current product revenue, central to the deal's value.",
+                claim_type=ClaimType.HYPOTHESIS,
+                citations=[Citation(source_document="target_seagen_overview.md", location="Section 3: Strategic Context")],
+                notes="No named-personnel retention data exists yet to size the actual attrition risk.",
+            )
+        ],
+        estimated_value=EstimatedValue(low=calc["low"], base=calc["base"], high=calc["high"]),
+        assumptions=["Seagen FY2022 revenue base of ~$2.0B", "1.5-5.0% of revenue at risk from pipeline delay/degradation if key personnel depart"],
+        implementation_difficulty=Difficulty.HIGH,
+        time_horizon="0-12 months",
+        key_risks=["No named-personnel data to validate the assumed attrition rate", "Retention packages not yet in place at announcement"],
+        calculation_method="calculate_dis_synergy_scenario",
+        calculation_inputs=calc_inputs,
+        cost_to_achieve=0.0,
+        year_1_pct=1.0,
+        year_2_pct=0.6,
+        year_3_pct=0.3,
+    )
+    tool_call = {"name": "calculate_dis_synergy_scenario", "arguments": calc_inputs, "result": calc}
+    return opp, tool_call
+
+
 def _pfizer_financial_assessment() -> tuple[AgentAssessment, list[dict], list[FinancialBaseline]]:
     combined = calculate_combined_metric(100_300_000_000, 2_000_000_000, adjustment_pct=0.0)
     baselines = [
@@ -516,6 +612,7 @@ def _pfizer_financial_assessment() -> tuple[AgentAssessment, list[dict], list[Fi
     ]
     cost_opp, cost_call = _seagen_cost_opportunity()
     revenue_opp, revenue_call = _seagen_revenue_opportunity()
+    dis_synergy_opp, dis_synergy_call = _seagen_dis_synergy_opportunity()
     assessment = AgentAssessment(
         role=AgentRole.FINANCIAL,
         position=(
@@ -524,7 +621,10 @@ def _pfizer_financial_assessment() -> tuple[AgentAssessment, list[dict], list[Fi
             "footprint and produces a defensible $80-200M range. The ex-U.S. launch-acceleration "
             "revenue opportunity is directionally plausible — Pfizer's global infrastructure is real "
             "— but the specific 5-12% uplift has no comparable prior case behind it and should be "
-            "tracked as a hypothesis pending an actual launch, not treated as a base-case number."
+            "tracked as a hypothesis pending an actual launch, not treated as a base-case number. "
+            "Against that, a platform acquisition like this one also carries a real dis-synergy: if "
+            "the scientific and clinical talent that built the ADC platform leaves before retention "
+            "is locked in, near-term pipeline value is directly at risk, not just a hypothetical."
         ),
         key_findings=[
             EvidenceItem(
@@ -533,21 +633,22 @@ def _pfizer_financial_assessment() -> tuple[AgentAssessment, list[dict], list[Fi
                 notes=combined["method"],
             )
         ],
-        opportunities=[cost_opp, revenue_opp],
+        opportunities=[cost_opp, revenue_opp, dis_synergy_opp],
     )
-    return assessment, [cost_call, revenue_call], baselines
+    return assessment, [cost_call, revenue_call, dis_synergy_call], baselines
 
 
 def _seagen_red_team_assessment() -> AgentAssessment:
     return AgentAssessment(
         role=AgentRole.RED_TEAM,
         position=(
-            "The analysis treats Seagen's ADC platform as a stable asset, but biotech acquisitions "
-            "of this kind live or die on retaining the scientists and clinicians who built the "
-            "pipeline — that risk isn't priced into the strategic case. Separately, the ex-U.S. "
-            "launch-acceleration revenue estimate rests on an assumed uplift rate with no comparable "
-            "prior launch to validate it; it should be a pending hypothesis, not a base-case number "
-            "used in the total value-creation figure."
+            "Biotech acquisitions of this kind live or die on retaining the scientists and "
+            "clinicians who built the pipeline — the dis-synergy line item correctly prices that "
+            "risk instead of leaving it out of the strategic case, but the 1.5-5.0% attrition range "
+            "behind it is itself asserted, not measured against any named-personnel data. Separately, "
+            "the ex-U.S. launch-acceleration revenue estimate rests on an assumed uplift rate with no "
+            "comparable prior launch to validate it; it should be a pending hypothesis, not a "
+            "base-case number used in the total value-creation figure."
         ),
         challenges=[
             Challenge(
@@ -560,6 +661,12 @@ def _seagen_red_team_assessment() -> AgentAssessment:
                 target_agent=AgentRole.STRATEGY,
                 target_claim="Seagen's approved ADC portfolio and pipeline give Pfizer an immediate, de-risked diversification away from COVID-dependent revenue",
                 critique="Doesn't address the risk that key Seagen scientists and clinical leaders leave post-close, which would erode the pipeline value the strategic case depends on.",
+                severity=RiskSeverity.MEDIUM,
+            ),
+            Challenge(
+                target_agent=AgentRole.FINANCIAL,
+                target_claim="Pipeline disruption from key ADC scientist and clinical-leader attrition",
+                critique="The 1.5-5.0% attrition range has no named-personnel data behind it; size it once retention packages are actually negotiated, not before.",
                 severity=RiskSeverity.MEDIUM,
             ),
         ],
@@ -592,7 +699,12 @@ def _pfizer_seagen_risks() -> list[Risk]:
             category="people",
             severity=RiskSeverity.HIGH,
             likelihood=RiskSeverity.HIGH,
+            severity_rationale="The platform's value is the pipeline the R&D team can still build, not just currently-marketed therapies — losing the team degrades exactly the asset being paid for, not a replaceable support function.",
+            likelihood_rationale="This is a well-documented pattern in biotech M&A specifically (not a generic integration risk), and no named-personnel retention agreements are in place as of announcement.",
             mitigation="Put retention packages in place for named key scientists and clinical leaders before close; keep the R&D organization operating semi-autonomously through year one.",
+            contingency="If a named key scientist departs despite retention terms, immediately reassess the affected program's timeline and cost-to-achieve rather than assuming the existing plan still holds.",
+            early_warning_indicator="Retention-offer acceptance rate among named key personnel, tracked from offer date through close.",
+            owner_role="Head of R&D Integration",
             evidence=[
                 EvidenceItem(
                     claim="Seagen's ADC platform is the basis for its approved therapies and its earlier-stage pipeline alike, making the underlying R&D organization, not just current product revenue, central to the deal's value.",
@@ -607,7 +719,12 @@ def _pfizer_seagen_risks() -> list[Risk]:
             category="regulatory",
             severity=RiskSeverity.HIGH,
             likelihood=RiskSeverity.MEDIUM,
+            severity_rationale="A delayed or failed pipeline program directly reduces the future revenue the deal's strategic case is built on, not just a near-term cost overrun.",
+            likelihood_rationale="Clinical and regulatory timeline slippage is the ordinary base rate for this stage of drug development, not a deal-specific event — the acquisition doesn't change the underlying odds.",
             mitigation="Align regulatory submission strategy across both companies' teams within the first 60 days rather than deferring it to post-integration.",
+            contingency="If a submission is delayed past the joint regulatory calendar, re-run the affected opportunity's ramp assumptions (year_1/2/3_pct) rather than leaving the stale timeline in the value-creation case.",
+            early_warning_indicator="Variance between actual and planned milestones on the joint regulatory calendar, reviewed monthly.",
+            owner_role="VP Regulatory Affairs",
         ),
     ]
 

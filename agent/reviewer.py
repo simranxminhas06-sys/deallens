@@ -19,7 +19,7 @@ from schemas.analysis_models import (
     RiskSeverity,
     ValueOpportunity,
 )
-from tools.financial_calculator import calculate_precision_flag
+from tools.financial_calculator import TOOL_FUNCTIONS, calculate_precision_flag
 
 HEDGE_WORDS = {"assume", "assumes", "assuming", "could", "might", "likely", "projected", "probably", "presumably"}
 DUPLICATE_TITLE_THRESHOLD = 0.82
@@ -117,7 +117,7 @@ def _check_precision(opportunities: list[ValueOpportunity]) -> list[ReviewIssue]
 
 def _check_calculation_consistency(opportunities: list[ValueOpportunity], tool_call_log: list[dict]) -> list[ReviewIssue]:
     issues = []
-    calc_calls = [c for c in tool_call_log if c["name"] in ("calculate_savings_scenario", "calculate_revenue_scenario")]
+    calc_calls = [c for c in tool_call_log if c["name"] in TOOL_FUNCTIONS]
     for o in opportunities:
         if not o.calculation_method:
             issues.append(

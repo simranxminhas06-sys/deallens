@@ -82,11 +82,16 @@ def compute_tornado_rows(opportunities: list[ValueOpportunity]) -> list[dict]:
 
 def compute_scenario_total(opportunities: list[ValueOpportunity], direction: str) -> float:
     """Total value creation if every swingable assumption, across every opportunity, moves to
-    its low ("downside") or high ("upside") bound simultaneously — the combined-stress-test
-    companion to the tornado chart's one-assumption-at-a-time view. Every calculation in this
-    codebase is monotonic in each of its inputs (all multiplicative, no offsetting terms), so
-    the low bound of every parameter is consistently the pessimistic case and the high bound
-    consistently the optimistic one.
+    its pessimistic ("low"/downside) or optimistic ("high"/upside) bound simultaneously — the
+    combined-stress-test companion to the tornado chart's one-assumption-at-a-time view.
+
+    Every calculation here is monotonic in each of its inputs (all multiplicative, no offsetting
+    terms) — but not always in the same DIRECTION: more uplift_pct or reduction_pct is better
+    (a benefit), while more attrition_pct (calculate_dis_synergy_scenario) is worse (a cost). So
+    rather than assuming the parameter named "_low" always produces the worse output, each bound
+    is evaluated and whichever one actually produces the lower/higher result is used — the same
+    min/max approach compute_tornado_rows already takes, just applied while building the combined
+    scenario instead of a single-parameter swing.
     """
     if direction not in ("low", "high"):
         raise ValueError("direction must be 'low' or 'high'")
@@ -101,7 +106,15 @@ def compute_scenario_total(opportunities: list[ValueOpportunity], direction: str
             bounds = _param_bounds(param, o.calculation_inputs)
             if bounds is None:
                 continue
-            swung_inputs[param] = bounds[0] if direction == "low" else bounds[1]
+            low_bound, high_bound = bounds
+            try:
+                low_result = fn(**{**swung_inputs, param: low_bound})["base"]
+                high_result = fn(**{**swung_inputs, param: high_bound})["base"]
+            except ValueError:
+                continue
+            worse_bound = low_bound if low_result <= high_result else high_bound
+            better_bound = high_bound if worse_bound == low_bound else low_bound
+            swung_inputs[param] = worse_bound if direction == "low" else better_bound
         try:
             result = fn(**swung_inputs)
             total += result["base"]

@@ -191,7 +191,12 @@ def generate_pdf(record: AnalysisRecord) -> bytes:
 
     revenue_opps = [o for o in record.opportunities if o.category.value == "revenue_synergy"]
     cost_opps = [o for o in record.opportunities if o.category.value == "cost_synergy"]
-    for section_title, opps in (("Revenue Opportunities", revenue_opps), ("Cost-Saving Opportunities", cost_opps)):
+    dis_synergy_opps = [o for o in record.opportunities if o.category.value == "dis_synergy"]
+    for section_title, opps in (
+        ("Revenue Opportunities", revenue_opps),
+        ("Cost-Saving Opportunities", cost_opps),
+        ("Dis-Synergies", dis_synergy_opps),
+    ):
         if not opps:
             continue
         story.append(Paragraph(section_title, _styles["DLH1"]))
@@ -224,14 +229,24 @@ def generate_pdf(record: AnalysisRecord) -> bytes:
     if record.risks:
         story.append(Paragraph("Risk Register", _styles["DLH1"]))
         story.append(_p("Sorted by risk score (likelihood x impact, 1-9), highest first.", "DLCaption"))
+        ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
         story.append(_table(
-            ["Risk", "Category", "Likelihood", "Impact", "Score", "Mitigation"],
+            ["Risk", "Category", "Likelihood", "Impact", "Score", "Owner"],
             [
-                [r.title, r.category, r.likelihood.value, r.severity.value, str(r.score), r.mitigation]
-                for r in sorted(record.risks, key=lambda r: r.score, reverse=True)
+                [r.title, r.category, r.likelihood.value, r.severity.value, str(r.score), r.owner_role or "n/a"]
+                for r in ranked_risks
             ],
             col_widths=[1.3 * inch, 0.8 * inch, 0.7 * inch, 0.6 * inch, 0.5 * inch, 2.6 * inch],
         ))
+        story.append(Spacer(1, 6))
+        for r in ranked_risks:
+            story.append(Paragraph(_esc(r.title), _styles["DLH2"]))
+            story.append(_p(r.description))
+            story.append(_p(f"Mitigation: {r.mitigation}", "DLCaption"))
+            if r.contingency:
+                story.append(_p(f"Contingency: {r.contingency}", "DLCaption"))
+            if r.early_warning_indicator:
+                story.append(_p(f"Early warning indicator: {r.early_warning_indicator}", "DLCaption"))
 
     if record.integration_plan:
         story.append(Paragraph("100-Day Integration Plan", _styles["DLH1"]))

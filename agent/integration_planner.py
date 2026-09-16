@@ -18,7 +18,17 @@ must have a single accountable owner_role, fall into exactly one 100-day phase, 
 implements an opportunity, name it in linked_opportunity. Flag risks even where mitigation is
 uncertain; do not omit a known risk because the mitigation is unclear. For every risk, set both
 severity (impact if it materializes) and likelihood (how likely it is to occur) — these are
-often different: a low-likelihood risk can still be high-severity, and vice versa."""
+often different: a low-likelihood risk can still be high-severity, and vice versa.
+
+For every risk, also write a real risk register, not just a label:
+- severity_rationale / likelihood_rationale: the specific reason for that rating, not a
+  restatement of the label (e.g. not "high likelihood" but why it's likely here).
+- mitigation: the preventive action taken before the risk materializes.
+- contingency: what actually happens — who does what — if the risk materializes despite
+  mitigation. This is different from mitigation and must not just repeat it.
+- early_warning_indicator: one concrete, observable signal that would tell you this risk is
+  starting to materialize, specific enough that someone could actually monitor for it.
+- owner_role: the single functional role accountable for monitoring and mitigating this risk."""
 
 
 class _RiskBatch(BaseModel):

@@ -24,7 +24,7 @@ def test_pipeline_produces_complete_record():
     assert record.target_profile is not None
     assert record.strategic_rationale is not None
     assert len(record.financial_baselines) == 3
-    assert len(record.opportunities) == 2
+    assert len(record.opportunities) == 3
     assert record.risks
     assert record.integration_plan is not None
     assert record.assumptions_approved is True

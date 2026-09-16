@@ -27,7 +27,20 @@ it — integration, systems, severance, etc.; 0 only if genuinely negligible), a
 year_2_pct / year_3_pct (the fraction of full run-rate value realized in each of the first
 three years — most synergies ramp in rather than starting at 100%; year_3_pct is usually 1.0).
 Base the ramp speed on implementation_difficulty and time_horizon: a low-difficulty, short-
-horizon opportunity ramps faster than a high-difficulty, long-horizon one."""
+horizon opportunity ramps faster than a high-difficulty, long-horizon one.
+
+When asked for dis-synergies specifically: these are value DESTROYED (customer/revenue
+attrition, disruption-driven losses), not value created. Use calculate_dis_synergy_scenario,
+whose attrition_pct_low/base/high mean the least/most-likely/most attrition — the opposite
+sense of a synergy's uplift_pct, since more attrition is worse, not better. Do not invent a
+dis-synergy that has no basis in the documents just to "balance" the case — omit the category
+entirely if nothing in the evidence supports one."""
+
+CALC_FN_BY_CATEGORY = {
+    "revenue_synergy": "calculate_revenue_scenario",
+    "cost_synergy": "calculate_savings_scenario",
+    "dis_synergy": "calculate_dis_synergy_scenario",
+}
 
 TOOL_SCHEMAS = FUNCTION_SCHEMAS + [SEARCH_TOOL_SCHEMA]
 TOOL_FUNCS = {**TOOL_FUNCTIONS, "search_uploaded_documents": search_uploaded_documents}
@@ -64,16 +77,29 @@ def generate_opportunities(
     category: str,
     assumptions_note: str = "",
 ) -> tuple[list[ValueOpportunity], list[dict]]:
-    """category is 'revenue_synergy' or 'cost_synergy'."""
-    calc_fn = "calculate_revenue_scenario" if category == "revenue_synergy" else "calculate_savings_scenario"
-    prompt = (
-        f"Identify {category.replace('_', ' ')} opportunities from combining {acquirer_name} and "
-        f"{target_name}, based only on evidence in the uploaded documents. For each one, use "
-        f"search_uploaded_documents to find the relevant baseline figure and overlap rationale, "
-        f"then call {calc_fn} to produce a low/base/high estimate — state the assumption behind "
-        f"each of the three scenarios. Set category='{category}' and calculation_method='{calc_fn}' "
-        "on every opportunity. Flag implementation_difficulty and time_horizon realistically."
-    )
+    """category is 'revenue_synergy', 'cost_synergy', or 'dis_synergy'."""
+    calc_fn = CALC_FN_BY_CATEGORY[category]
+    if category == "dis_synergy":
+        prompt = (
+            f"Identify dis-synergies — value DESTROYED, not created — from combining "
+            f"{acquirer_name} and {target_name}, based only on evidence in the uploaded documents "
+            "(e.g. customer attrition risk, brand/positioning conflict, disruption to an existing "
+            "revenue stream). Only propose one if there is real evidence for it; it is fine to "
+            "return none. For each one, use search_uploaded_documents to find the relevant baseline "
+            f"revenue and the evidence for attrition risk, then call {calc_fn} to produce a "
+            "low/base/high estimate — state the assumption behind each of the three scenarios. Set "
+            f"category='{category}' and calculation_method='{calc_fn}' on every opportunity. Flag "
+            "implementation_difficulty and time_horizon realistically."
+        )
+    else:
+        prompt = (
+            f"Identify {category.replace('_', ' ')} opportunities from combining {acquirer_name} and "
+            f"{target_name}, based only on evidence in the uploaded documents. For each one, use "
+            f"search_uploaded_documents to find the relevant baseline figure and overlap rationale, "
+            f"then call {calc_fn} to produce a low/base/high estimate — state the assumption behind "
+            f"each of the three scenarios. Set category='{category}' and calculation_method='{calc_fn}' "
+            "on every opportunity. Flag implementation_difficulty and time_horizon realistically."
+        )
     if assumptions_note:
         prompt += f"\n\nUser-provided transaction assumptions to account for: {assumptions_note}"
     result, log = run_with_tools(

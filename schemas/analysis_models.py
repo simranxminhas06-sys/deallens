@@ -19,6 +19,7 @@ class ClaimType(str, Enum):
 class Category(str, Enum):
     REVENUE_SYNERGY = "revenue_synergy"
     COST_SYNERGY = "cost_synergy"
+    DIS_SYNERGY = "dis_synergy"
 
 
 class Difficulty(str, Enum):
@@ -119,7 +120,22 @@ class Risk(BaseModel):
     category: str = Field(description="e.g. operational, cultural, regulatory, financial, customer")
     severity: RiskSeverity = Field(description="Impact if the risk materializes")
     likelihood: RiskSeverity = Field(default=RiskSeverity.MEDIUM, description="How likely the risk is to occur")
-    mitigation: str
+    severity_rationale: Optional[str] = Field(
+        default=None, description="Why this impact level was chosen, not just the label"
+    )
+    likelihood_rationale: Optional[str] = Field(
+        default=None, description="Why this likelihood was chosen, not just the label"
+    )
+    mitigation: str = Field(description="Preventive action taken before the risk materializes")
+    contingency: Optional[str] = Field(
+        default=None, description="What to actually do if the risk materializes despite mitigation"
+    )
+    early_warning_indicator: Optional[str] = Field(
+        default=None, description="An observable, monitorable signal that this risk is starting to materialize"
+    )
+    owner_role: Optional[str] = Field(
+        default=None, description="Functional role accountable for monitoring and mitigating this risk"
+    )
     evidence: list[EvidenceItem] = Field(default_factory=list)
 
     @property

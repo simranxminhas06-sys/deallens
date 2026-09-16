@@ -13,7 +13,7 @@ from agent import value_creation
 from agent.llm import get_client
 from schemas.analysis_models import AgentAssessment, AgentRole, EvidenceItem, FinancialBaseline, ValueOpportunity
 
-CALC_TOOL_NAMES = ("calculate_savings_scenario", "calculate_revenue_scenario")
+CALC_TOOL_NAMES = ("calculate_savings_scenario", "calculate_revenue_scenario", "calculate_dis_synergy_scenario")
 
 FINANCIAL_INSTRUCTIONS = """You are the Financial Agent in an M&A investment committee. You are
 skeptical by default: every dollar figure must trace to a financial_calculator tool call, and you
@@ -80,8 +80,11 @@ def assess(
     cost_opps, cost_log = value_creation.generate_opportunities(
         acquirer_name, target_name, vector_store_id, "cost_synergy", assumptions_note
     )
-    opportunities = revenue_opps + cost_opps
-    tool_call_log = baseline_log + revenue_log + cost_log
+    dis_synergy_opps, dis_synergy_log = value_creation.generate_opportunities(
+        acquirer_name, target_name, vector_store_id, "dis_synergy", assumptions_note
+    )
+    opportunities = revenue_opps + cost_opps + dis_synergy_opps
+    tool_call_log = baseline_log + revenue_log + cost_log + dis_synergy_log
     _attach_calculation_inputs(opportunities, tool_call_log)
 
     position = _position_statement(acquirer_name, target_name, baselines, opportunities)

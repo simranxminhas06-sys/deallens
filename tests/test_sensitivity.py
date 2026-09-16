@@ -41,6 +41,25 @@ def _revenue_opportunity() -> ValueOpportunity:
     )
 
 
+def _dis_synergy_opportunity() -> ValueOpportunity:
+    return ValueOpportunity(
+        title="Customer attrition",
+        category=Category.DIS_SYNERGY,
+        rationale="r",
+        estimated_value=EstimatedValue(low=-16_000_000, base=-12_000_000, high=-8_000_000),
+        implementation_difficulty=Difficulty.LOW,
+        time_horizon="0-6 months",
+        calculation_method="calculate_dis_synergy_scenario",
+        calculation_inputs={
+            "baseline_revenue": 800_000_000,
+            "attrition_pct_low": 0.01,
+            "attrition_pct_base": 0.015,
+            "attrition_pct_high": 0.02,
+            "margin_pct": 1.0,
+        },
+    )
+
+
 def test_uses_stated_low_high_as_bounds_for_a_base_parameter():
     rows = compute_tornado_rows([_cost_opportunity()])
     reduction_row = next(r for r in rows if r["parameter"] == "reduction_pct_base")
@@ -123,3 +142,23 @@ def test_scenario_total_rejects_bad_direction():
 
 def test_scenario_total_empty_opportunities_is_zero():
     assert compute_scenario_total([], "low") == 0.0
+
+
+def test_scenario_total_downside_stresses_a_dis_synergy_toward_more_harm_not_less():
+    """A dis-synergy's 'low'-suffixed input (attrition_pct_low) is the LEAST harmful case, the
+    opposite of a benefit parameter's '_low' meaning 'worst'. The combined downside scenario
+    must still pick whichever bound actually makes the total worse (more attrition here), not
+    blindly substitute the parameter literally named '_low'.
+    """
+    opportunities = [_dis_synergy_opportunity()]
+    total_base = sum(o.estimated_value.base for o in opportunities)
+    downside = compute_scenario_total(opportunities, "low")
+    upside = compute_scenario_total(opportunities, "high")
+    assert downside < total_base < upside
+
+
+def test_tornado_swing_direction_agnostic_for_dis_synergy():
+    rows = compute_tornado_rows([_dis_synergy_opportunity()])
+    attrition_row = next(r for r in rows if r["parameter"] == "attrition_pct_base")
+    assert attrition_row["total_low"] == pytest.approx(-16_000_000)
+    assert attrition_row["total_high"] == pytest.approx(-8_000_000)

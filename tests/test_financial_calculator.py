@@ -6,6 +6,7 @@ from tools.financial_calculator import (
     calculate_accretion_dilution,
     calculate_combined_metric,
     calculate_deal_economics,
+    calculate_dis_synergy_scenario,
     calculate_growth_rate,
     calculate_margin,
     calculate_precision_flag,
@@ -190,6 +191,38 @@ def test_accretion_dilution_rejects_mix_not_summing_to_one():
             acquirer_shares_outstanding=100_000_000,
             acquirer_net_income=500_000_000,
         )
+
+
+def test_dis_synergy_scenario_returns_negative_values_ordered_low_to_high():
+    result = calculate_dis_synergy_scenario(
+        baseline_revenue=800_000_000,
+        attrition_pct_low=0.01,
+        attrition_pct_base=0.015,
+        attrition_pct_high=0.02,
+        margin_pct=1.0,
+    )
+    assert result["low"] == -16_000_000
+    assert result["base"] == -12_000_000
+    assert result["high"] == -8_000_000
+    assert result["low"] <= result["base"] <= result["high"]
+
+
+def test_dis_synergy_scenario_worst_case_uses_the_high_attrition_rate():
+    result = calculate_dis_synergy_scenario(
+        baseline_revenue=1_000_000,
+        attrition_pct_low=0.02,
+        attrition_pct_base=0.05,
+        attrition_pct_high=0.10,
+    )
+    assert result["low"] == -100_000  # -(1,000,000 * 0.10)
+    assert result["high"] == -20_000  # -(1,000,000 * 0.02)
+
+
+def test_dis_synergy_scenario_rejects_out_of_range_pct():
+    with pytest.raises(ValueError):
+        calculate_dis_synergy_scenario(1_000_000, -0.1, 0.05, 0.1)
+    with pytest.raises(ValueError):
+        calculate_dis_synergy_scenario(1_000_000, 0.02, 0.05, 1.5)
 
 
 def test_accretion_dilution_rejects_nonpositive_deal_value():

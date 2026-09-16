@@ -117,8 +117,13 @@ def generate_report(record: AnalysisRecord) -> str:
 
     revenue_opps = [o for o in record.opportunities if o.category.value == "revenue_synergy"]
     cost_opps = [o for o in record.opportunities if o.category.value == "cost_synergy"]
+    dis_synergy_opps = [o for o in record.opportunities if o.category.value == "dis_synergy"]
 
-    for title, opps in (("Revenue Opportunities", revenue_opps), ("Cost-Saving Opportunities", cost_opps)):
+    for title, opps in (
+        ("Revenue Opportunities", revenue_opps),
+        ("Cost-Saving Opportunities", cost_opps),
+        ("Dis-Synergies", dis_synergy_opps),
+    ):
         if not opps:
             continue
         lines.append(f"## {title}\n")
@@ -151,11 +156,25 @@ def generate_report(record: AnalysisRecord) -> str:
     if record.risks:
         lines.append("## Risk Register\n")
         lines.append("Sorted by risk score (likelihood x impact, 1-9), highest first.\n")
-        lines.append("| Risk | Category | Likelihood | Impact | Score | Mitigation |")
+        lines.append("| Risk | Category | Likelihood | Impact | Score | Owner |")
         lines.append("|---|---|---|---|---|---|")
-        for r in sorted(record.risks, key=lambda r: r.score, reverse=True):
-            lines.append(f"| {r.title} | {r.category} | {r.likelihood.value} | {r.severity.value} | {r.score} | {r.mitigation} |")
+        ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
+        for r in ranked_risks:
+            lines.append(f"| {r.title} | {r.category} | {r.likelihood.value} | {r.severity.value} | {r.score} | {r.owner_role or 'n/a'} |")
         lines.append("")
+        for r in ranked_risks:
+            lines.append(f"**{r.title}**\n")
+            lines.append(f"{r.description}\n")
+            if r.likelihood_rationale:
+                lines.append(f"- Why {r.likelihood.value} likelihood: {r.likelihood_rationale}")
+            if r.severity_rationale:
+                lines.append(f"- Why {r.severity.value} impact: {r.severity_rationale}")
+            lines.append(f"- Mitigation: {r.mitigation}")
+            if r.contingency:
+                lines.append(f"- Contingency: {r.contingency}")
+            if r.early_warning_indicator:
+                lines.append(f"- Early warning indicator: {r.early_warning_indicator}")
+            lines.append("")
 
     if record.integration_plan:
         lines.append("## 100-Day Integration Plan\n")

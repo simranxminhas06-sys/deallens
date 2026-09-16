@@ -477,7 +477,12 @@ def generate_pptx(record: AnalysisRecord) -> bytes:
     # --- Opportunities
     revenue_opps = [o for o in record.opportunities if o.category.value == "revenue_synergy"]
     cost_opps = [o for o in record.opportunities if o.category.value == "cost_synergy"]
-    for section_title, opps in (("Revenue Opportunities", revenue_opps), ("Cost-Saving Opportunities", cost_opps)):
+    dis_synergy_opps = [o for o in record.opportunities if o.category.value == "dis_synergy"]
+    for section_title, opps in (
+        ("Revenue Opportunities", revenue_opps),
+        ("Cost-Saving Opportunities", cost_opps),
+        ("Dis-Synergies", dis_synergy_opps),
+    ):
         if not opps:
             continue
         slide = new_slide()
@@ -501,12 +506,10 @@ def generate_pptx(record: AnalysisRecord) -> bytes:
 
     # --- Risk register
     if record.risks:
+        ranked_risks = sorted(record.risks, key=lambda r: r.score, reverse=True)
         slide = new_slide()
         top = _title(slide, "Risk Register", "Sorted by risk score (likelihood x impact, 1-9), highest first.")
-        rows = [
-            [r.title, r.category, r.likelihood.value, r.severity.value, str(r.score)]
-            for r in sorted(record.risks, key=lambda r: r.score, reverse=True)
-        ]
+        rows = [[r.title, r.category, r.likelihood.value, r.severity.value, str(r.score)] for r in ranked_risks]
         _table(
             slide,
             ["Risk", "Category", "Likelihood", "Impact", "Score"],
@@ -514,6 +517,20 @@ def generate_pptx(record: AnalysisRecord) -> bytes:
             top=top,
             col_widths=[3, 2, 1.5, 1.5, 1],
         )
+
+        top_risks = [r for r in ranked_risks if r.mitigation][:3]
+        if top_risks:
+            slide = new_slide()
+            top = _title(slide, "Top Risks — Mitigation & Contingency")
+            lines = []
+            for r in top_risks:
+                lines.append(r.title)
+                lines.append(f"  Mitigation: {r.mitigation}")
+                if r.contingency:
+                    lines.append(f"  Contingency: {r.contingency}")
+                if r.owner_role:
+                    lines.append(f"  Owner: {r.owner_role}")
+            _bullets(slide, lines, top=top, font_size=13)
 
     # --- 100-day plan
     if record.integration_plan:
