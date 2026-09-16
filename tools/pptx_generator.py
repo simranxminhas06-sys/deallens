@@ -25,7 +25,7 @@ from pptx.util import Inches, Pt
 
 from agent.verdict import compute_verdict
 from schemas.analysis_models import AnalysisRecord
-from tools.financial_calculator import calculate_deal_economics
+from tools.financial_calculator import calculate_accretion_dilution, calculate_deal_economics
 
 NAVY = RGBColor(0x1B, 0x2A, 0x4A)
 DARK_BG = RGBColor(0x07, 0x08, 0x0D)
@@ -361,6 +361,48 @@ def generate_pptx(record: AnalysisRecord) -> bytes:
             ("Value creation", f"${total_value_creation:,.0f}", ACCENT),
             ("Deal value", f"${t.deal_value:,.0f}", WHITE),
             ("% of deal value", f"{econ['value_creation_pct_of_deal']:.2f}%", ACCENT),
+        ]
+        for i, (label, value, color) in enumerate(stats):
+            x = MARGIN + i * (card_w + Inches(0.3))
+            _stat_card(slide, x, top, card_w, card_h, label, value, value_color=color)
+
+    # --- Financing & accretion/dilution
+    if t.deal_value and t.financing:
+        f = t.financing
+        ad = calculate_accretion_dilution(
+            deal_value=t.deal_value,
+            cash_pct=f.cash_pct,
+            stock_pct=f.stock_pct,
+            debt_pct=f.debt_pct,
+            new_debt_interest_rate=f.new_debt_interest_rate,
+            foregone_interest_rate=f.foregone_interest_rate,
+            acquirer_tax_rate=f.acquirer_tax_rate,
+            acquirer_share_price=f.acquirer_share_price,
+            acquirer_shares_outstanding=f.acquirer_shares_outstanding,
+            acquirer_net_income=f.acquirer_net_income,
+            target_net_income=f.target_net_income or 0.0,
+            synergies_after_tax_run_rate=total_value_creation * (1 - f.acquirer_tax_rate),
+        )
+        slide = new_slide()
+        subtitle = (
+            f"Financed with {f.cash_pct:.0%} cash / {f.stock_pct:.0%} stock / {f.debt_pct:.0%} debt"
+            + (f" — {f.note}" if f.note else "")
+        )
+        top = _title(slide, "Financing & Accretion/Dilution", subtitle=subtitle)
+        card_w = (CONTENT_W - Inches(0.6)) / 3
+        card_h = Inches(1.6)
+        stats = [
+            ("Standalone EPS", f"${ad['standalone_eps']:.2f}", WHITE),
+            (
+                "Pro forma EPS — Day 1",
+                f"${ad['pro_forma_eps_day1']:.2f} ({ad['accretion_dilution_pct_day1']:+.1f}%)",
+                ACCENT if ad["accretion_dilution_pct_day1"] >= 0 else RGBColor(0xE0, 0x5A, 0x5A),
+            ),
+            (
+                "Pro forma EPS — run-rate",
+                f"${ad['pro_forma_eps_run_rate']:.2f} ({ad['accretion_dilution_pct_run_rate']:+.1f}%)",
+                ACCENT if ad["accretion_dilution_pct_run_rate"] >= 0 else RGBColor(0xE0, 0x5A, 0x5A),
+            ),
         ]
         for i, (label, value, color) in enumerate(stats):
             x = MARGIN + i * (card_w + Inches(0.3))

@@ -18,7 +18,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from agent.verdict import compute_verdict
 from schemas.analysis_models import AnalysisRecord, EvidenceItem
-from tools.financial_calculator import calculate_deal_economics, calculate_ramp_adjusted_value
+from tools.financial_calculator import calculate_accretion_dilution, calculate_deal_economics, calculate_ramp_adjusted_value
 
 NAVY = colors.HexColor("#1B2A4A")
 ACCENT = colors.HexColor("#3D5AFE")
@@ -131,6 +131,32 @@ def generate_pdf(record: AnalysisRecord) -> bytes:
         story.append(_p(
             f"Identified value creation of ${total_value_creation:,.0f} against a "
             f"${t.deal_value:,.0f} deal value — {econ['value_creation_pct_of_deal']:.2f}% of the purchase price."
+        ))
+
+    if t.deal_value and t.financing:
+        f = t.financing
+        ad = calculate_accretion_dilution(
+            deal_value=t.deal_value,
+            cash_pct=f.cash_pct,
+            stock_pct=f.stock_pct,
+            debt_pct=f.debt_pct,
+            new_debt_interest_rate=f.new_debt_interest_rate,
+            foregone_interest_rate=f.foregone_interest_rate,
+            acquirer_tax_rate=f.acquirer_tax_rate,
+            acquirer_share_price=f.acquirer_share_price,
+            acquirer_shares_outstanding=f.acquirer_shares_outstanding,
+            acquirer_net_income=f.acquirer_net_income,
+            target_net_income=f.target_net_income or 0.0,
+            synergies_after_tax_run_rate=total_value_creation * (1 - f.acquirer_tax_rate),
+        )
+        story.append(Paragraph("Financing &amp; Accretion/Dilution", _styles["DLH1"]))
+        if f.note:
+            story.append(_p(f.note, "DLCaption"))
+        story.append(_p(
+            f"Financed with {f.cash_pct:.0%} cash / {f.stock_pct:.0%} stock / {f.debt_pct:.0%} debt. "
+            f"Standalone EPS ${ad['standalone_eps']:.2f}; pro forma EPS ${ad['pro_forma_eps_day1']:.2f} "
+            f"({ad['accretion_dilution_pct_day1']:+.1f}%) on Day 1, ${ad['pro_forma_eps_run_rate']:.2f} "
+            f"({ad['accretion_dilution_pct_run_rate']:+.1f}%) once synergies reach full run-rate."
         ))
 
     story.append(Paragraph("Company Profiles", _styles["DLH1"]))

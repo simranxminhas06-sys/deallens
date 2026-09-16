@@ -201,12 +201,38 @@ class AgentAssessment(BaseModel):
     challenges: list[Challenge] = Field(default_factory=list, description="Populated by the Red-Team Agent")
 
 
+class FinancingStructure(BaseModel):
+    """How the deal value is actually funded — feeds the accretion/dilution calculation.
+    Optional on TransactionAssumptions so existing records/fixtures without it are unaffected.
+    """
+
+    cash_pct: float = Field(description="Fraction of deal_value paid in cash; cash_pct + stock_pct + debt_pct == 1.0")
+    stock_pct: float
+    debt_pct: float
+    new_debt_interest_rate: float = Field(default=0.0, description="Annual rate on new acquisition debt")
+    foregone_interest_rate: float = Field(
+        default=0.0, description="Rate the cash used would otherwise have earned (opportunity cost)"
+    )
+    acquirer_tax_rate: float = Field(default=0.21, description="Applied to interest expense and foregone interest")
+    acquirer_share_price: float
+    acquirer_shares_outstanding: float
+    acquirer_net_income: float
+    target_net_income: Optional[float] = Field(
+        default=None, description="Target's standalone net income, added into pro forma combined net income"
+    )
+    note: Optional[str] = Field(
+        default=None,
+        description="Disclosure when the financing mix is illustrative rather than the actual historical deal terms",
+    )
+
+
 class TransactionAssumptions(BaseModel):
     acquirer_name: str
     target_name: str
     announcement_date: Optional[str] = None
     deal_value: Optional[float] = None
     deal_structure: Optional[str] = None
+    financing: Optional[FinancingStructure] = None
     user_notes: Optional[str] = None
 
 

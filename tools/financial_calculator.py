@@ -141,6 +141,74 @@ def calculate_ramp_adjusted_value(
     }
 
 
+def calculate_accretion_dilution(
+    deal_value: float,
+    cash_pct: float,
+    stock_pct: float,
+    debt_pct: float,
+    new_debt_interest_rate: float,
+    foregone_interest_rate: float,
+    acquirer_tax_rate: float,
+    acquirer_share_price: float,
+    acquirer_shares_outstanding: float,
+    acquirer_net_income: float,
+    target_net_income: float = 0.0,
+    synergies_after_tax_run_rate: float = 0.0,
+) -> dict:
+    """EPS impact of financing deal_value with a cash/stock/debt mix. Not exposed to the LLM
+    as a tool; used directly by the app, same as calculate_deal_economics.
+
+    Reports pro forma EPS both before and after run-rate synergies, since Day 1 dilution
+    funded by debt or stock is normal in real deals and isn't itself a red flag — what
+    matters is whether synergies are expected to close the gap.
+    """
+    if deal_value <= 0:
+        raise ValueError("deal_value must be positive")
+    if acquirer_shares_outstanding <= 0 or acquirer_share_price <= 0:
+        raise ValueError("acquirer_shares_outstanding and acquirer_share_price must be positive")
+    if round(cash_pct + stock_pct + debt_pct, 6) != 1.0:
+        raise ValueError("cash_pct + stock_pct + debt_pct must sum to 1.0")
+    for pct, name in ((cash_pct, "cash_pct"), (stock_pct, "stock_pct"), (debt_pct, "debt_pct")):
+        if not 0 <= pct <= 1:
+            raise ValueError(f"{name} must be between 0 and 1")
+
+    cash_used = deal_value * cash_pct
+    new_debt = deal_value * debt_pct
+    shares_issued = (deal_value * stock_pct) / acquirer_share_price
+    pro_forma_shares = acquirer_shares_outstanding + shares_issued
+
+    after_tax_interest_expense = new_debt * new_debt_interest_rate * (1 - acquirer_tax_rate)
+    after_tax_foregone_interest = cash_used * foregone_interest_rate * (1 - acquirer_tax_rate)
+    financing_drag = after_tax_interest_expense + after_tax_foregone_interest
+
+    standalone_eps = acquirer_net_income / acquirer_shares_outstanding
+    combined_net_income_day1 = acquirer_net_income + target_net_income - financing_drag
+    pro_forma_eps_day1 = combined_net_income_day1 / pro_forma_shares
+    combined_net_income_run_rate = combined_net_income_day1 + synergies_after_tax_run_rate
+    pro_forma_eps_run_rate = combined_net_income_run_rate / pro_forma_shares
+
+    def _pct_change(pro_forma: float) -> float:
+        return (pro_forma - standalone_eps) / abs(standalone_eps)
+
+    return {
+        "cash_used": round(cash_used, 2),
+        "new_debt": round(new_debt, 2),
+        "shares_issued": round(shares_issued, 2),
+        "pro_forma_shares": round(pro_forma_shares, 2),
+        "after_tax_interest_expense": round(after_tax_interest_expense, 2),
+        "after_tax_foregone_interest": round(after_tax_foregone_interest, 2),
+        "standalone_eps": round(standalone_eps, 4),
+        "pro_forma_eps_day1": round(pro_forma_eps_day1, 4),
+        "pro_forma_eps_run_rate": round(pro_forma_eps_run_rate, 4),
+        "accretion_dilution_pct_day1": round(_pct_change(pro_forma_eps_day1) * 100, 2),
+        "accretion_dilution_pct_run_rate": round(_pct_change(pro_forma_eps_run_rate) * 100, 2),
+        "method": (
+            "pro_forma_eps = (acquirer_ni + target_ni - after_tax_financing_drag [+ after_tax_synergies]) "
+            "/ (acquirer_shares + shares_issued_for_stock_pct)"
+        ),
+    }
+
+
 def calculate_precision_flag(value: float, sig_figs_allowed: int = 3) -> dict:
     """Flags whether a dollar estimate is stated with implausible false precision."""
     if value == 0:

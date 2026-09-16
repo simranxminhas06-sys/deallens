@@ -3,6 +3,7 @@ import math
 import pytest
 
 from tools.financial_calculator import (
+    calculate_accretion_dilution,
     calculate_combined_metric,
     calculate_deal_economics,
     calculate_growth_rate,
@@ -113,3 +114,95 @@ def test_ramp_adjusted_value_no_ramp_no_cost():
 def test_ramp_adjusted_value_rejects_negative_pct():
     with pytest.raises(ValueError):
         calculate_ramp_adjusted_value(100_000, -0.1, 0.8, 1.0)
+
+
+def test_accretion_dilution_all_cash_uses_foregone_interest():
+    result = calculate_accretion_dilution(
+        deal_value=1_000_000_000,
+        cash_pct=1.0,
+        stock_pct=0.0,
+        debt_pct=0.0,
+        new_debt_interest_rate=0.0,
+        foregone_interest_rate=0.04,
+        acquirer_tax_rate=0.21,
+        acquirer_share_price=100.0,
+        acquirer_shares_outstanding=100_000_000,
+        acquirer_net_income=500_000_000,
+        target_net_income=50_000_000,
+    )
+    assert result["shares_issued"] == 0
+    assert result["after_tax_foregone_interest"] == pytest.approx(31_600_000.0)
+    assert result["standalone_eps"] == pytest.approx(5.0)
+    assert result["pro_forma_eps_day1"] == pytest.approx(5.184, abs=0.001)
+    assert result["accretion_dilution_pct_day1"] == pytest.approx(3.68, abs=0.01)
+
+
+def test_accretion_dilution_all_stock_is_dilutive_before_synergies():
+    result = calculate_accretion_dilution(
+        deal_value=1_000_000_000,
+        cash_pct=0.0,
+        stock_pct=1.0,
+        debt_pct=0.0,
+        new_debt_interest_rate=0.0,
+        foregone_interest_rate=0.0,
+        acquirer_tax_rate=0.21,
+        acquirer_share_price=50.0,
+        acquirer_shares_outstanding=100_000_000,
+        acquirer_net_income=500_000_000,
+    )
+    assert result["shares_issued"] == pytest.approx(20_000_000.0)
+    assert result["pro_forma_shares"] == pytest.approx(120_000_000.0)
+    assert result["pro_forma_eps_day1"] == pytest.approx(4.1667, abs=0.001)
+    assert result["accretion_dilution_pct_day1"] == pytest.approx(-16.67, abs=0.01)
+
+
+def test_accretion_dilution_run_rate_synergies_can_flip_to_accretive():
+    kwargs = dict(
+        deal_value=1_000_000_000,
+        cash_pct=0.0,
+        stock_pct=1.0,
+        debt_pct=0.0,
+        new_debt_interest_rate=0.0,
+        foregone_interest_rate=0.0,
+        acquirer_tax_rate=0.21,
+        acquirer_share_price=50.0,
+        acquirer_shares_outstanding=100_000_000,
+        acquirer_net_income=500_000_000,
+    )
+    day1 = calculate_accretion_dilution(**kwargs)
+    with_synergies = calculate_accretion_dilution(**kwargs, synergies_after_tax_run_rate=150_000_000)
+    assert day1["pro_forma_eps_day1"] == with_synergies["pro_forma_eps_day1"]
+    assert with_synergies["accretion_dilution_pct_run_rate"] > day1["accretion_dilution_pct_day1"]
+    assert with_synergies["accretion_dilution_pct_run_rate"] > 0
+
+
+def test_accretion_dilution_rejects_mix_not_summing_to_one():
+    with pytest.raises(ValueError):
+        calculate_accretion_dilution(
+            deal_value=1_000_000_000,
+            cash_pct=0.5,
+            stock_pct=0.4,
+            debt_pct=0.4,
+            new_debt_interest_rate=0.05,
+            foregone_interest_rate=0.04,
+            acquirer_tax_rate=0.21,
+            acquirer_share_price=50.0,
+            acquirer_shares_outstanding=100_000_000,
+            acquirer_net_income=500_000_000,
+        )
+
+
+def test_accretion_dilution_rejects_nonpositive_deal_value():
+    with pytest.raises(ValueError):
+        calculate_accretion_dilution(
+            deal_value=0,
+            cash_pct=1.0,
+            stock_pct=0.0,
+            debt_pct=0.0,
+            new_debt_interest_rate=0.0,
+            foregone_interest_rate=0.0,
+            acquirer_tax_rate=0.21,
+            acquirer_share_price=50.0,
+            acquirer_shares_outstanding=100_000_000,
+            acquirer_net_income=500_000_000,
+        )

@@ -3,6 +3,7 @@ from schemas.analysis_models import (
     AgentAssessment,
     AgentRole,
     Challenge,
+    FinancingStructure,
     ReviewIssue,
     ReviewResult,
     RiskSeverity,
@@ -64,6 +65,47 @@ def test_further_diligence_on_single_high_review_issue():
 def test_further_diligence_on_low_citation_coverage_alone():
     verdict = compute_verdict(_clean_review(coverage=40.0), [], 50_000_000, TRANSACTION)
     assert verdict.level == VerdictLevel.FURTHER_DILIGENCE
+
+
+def test_proceed_still_proceeds_with_accretion_note_when_mildly_accretive():
+    transaction = TransactionAssumptions(
+        acquirer_name="A",
+        target_name="B",
+        deal_value=1_000_000_000,
+        financing=FinancingStructure(
+            cash_pct=1.0,
+            stock_pct=0.0,
+            debt_pct=0.0,
+            foregone_interest_rate=0.04,
+            acquirer_tax_rate=0.21,
+            acquirer_share_price=100.0,
+            acquirer_shares_outstanding=100_000_000,
+            acquirer_net_income=500_000_000,
+        ),
+    )
+    verdict = compute_verdict(_clean_review(), [_assessment(AgentRole.FINANCIAL)], 50_000_000, transaction)
+    assert verdict.level == VerdictLevel.PROCEED
+    assert any("accretive" in r for r in verdict.reasons)
+
+
+def test_further_diligence_when_severely_dilutive_at_run_rate():
+    transaction = TransactionAssumptions(
+        acquirer_name="A",
+        target_name="B",
+        deal_value=1_000_000_000,
+        financing=FinancingStructure(
+            cash_pct=0.0,
+            stock_pct=1.0,
+            debt_pct=0.0,
+            acquirer_tax_rate=0.21,
+            acquirer_share_price=10.0,
+            acquirer_shares_outstanding=10_000_000,
+            acquirer_net_income=10_000_000,
+        ),
+    )
+    verdict = compute_verdict(_clean_review(), [_assessment(AgentRole.FINANCIAL)], 5_000_000, transaction)
+    assert verdict.level == VerdictLevel.FURTHER_DILIGENCE
+    assert any("dilutive" in r for r in verdict.reasons)
 
 
 def test_do_not_proceed_when_review_issues_and_red_team_both_compound():

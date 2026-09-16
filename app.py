@@ -24,8 +24,13 @@ from agent.reviewer import review_analysis
 from agent.sensitivity import compute_scenario_total, compute_tornado_rows
 from agent.verdict import compute_verdict
 from db.database import list_analyses, load_analysis, save_analysis
-from schemas.analysis_models import AgentRole, EstimatedValue, TransactionAssumptions, VerdictLevel
-from tools.financial_calculator import TOOL_FUNCTIONS, calculate_deal_economics, calculate_ramp_adjusted_value
+from schemas.analysis_models import AgentRole, EstimatedValue, FinancingStructure, TransactionAssumptions, VerdictLevel
+from tools.financial_calculator import (
+    TOOL_FUNCTIONS,
+    calculate_accretion_dilution,
+    calculate_deal_economics,
+    calculate_ramp_adjusted_value,
+)
 from tools.pdf_generator import generate_pdf
 from tools.pptx_generator import generate_pptx
 from tools.report_generator import generate_report
@@ -469,6 +474,43 @@ def page_create_analysis():
             value="Assume no material regulatory divestitures required.",
         )
 
+        with st.expander("Financing structure (optional — enables the accretion/dilution view on Recommendation)"):
+            include_financing = st.checkbox("Include a financing structure", value=False)
+            financing = None
+            if include_financing:
+                fcol1, fcol2, fcol3 = st.columns(3)
+                cash_pct = fcol1.number_input("Cash %", min_value=0.0, max_value=100.0, value=100.0, step=5.0) / 100
+                stock_pct = fcol2.number_input("Stock %", min_value=0.0, max_value=100.0, value=0.0, step=5.0) / 100
+                debt_pct = fcol3.number_input("Debt %", min_value=0.0, max_value=100.0, value=0.0, step=5.0) / 100
+                if round(cash_pct + stock_pct + debt_pct, 2) != 1.0:
+                    st.warning("Cash % + Stock % + Debt % should sum to 100%.")
+                fcol1, fcol2, fcol3 = st.columns(3)
+                new_debt_interest_rate = fcol1.number_input("New debt interest rate %", min_value=0.0, value=5.0, step=0.25) / 100
+                foregone_interest_rate = fcol2.number_input("Foregone interest rate on cash used %", min_value=0.0, value=4.0, step=0.25) / 100
+                acquirer_tax_rate = fcol3.number_input("Acquirer tax rate %", min_value=0.0, max_value=100.0, value=21.0, step=1.0) / 100
+                fcol1, fcol2, fcol3 = st.columns(3)
+                acquirer_share_price = fcol1.number_input("Acquirer share price (USD)", min_value=0.01, value=100.0, step=1.0)
+                acquirer_shares_outstanding = fcol2.number_input("Acquirer shares outstanding", min_value=1.0, value=1_000_000_000.0, step=1_000_000.0)
+                acquirer_net_income = fcol3.number_input("Acquirer net income (USD, trailing)", value=0.0, step=1_000_000.0)
+                target_net_income = st.number_input("Target net income (USD, trailing, optional)", value=0.0, step=1_000_000.0)
+                financing_note = st.text_input(
+                    "Note (e.g. flag if this financing mix is illustrative rather than the deal's actual terms)",
+                    value="",
+                )
+                financing = FinancingStructure(
+                    cash_pct=cash_pct,
+                    stock_pct=stock_pct,
+                    debt_pct=debt_pct,
+                    new_debt_interest_rate=new_debt_interest_rate,
+                    foregone_interest_rate=foregone_interest_rate,
+                    acquirer_tax_rate=acquirer_tax_rate,
+                    acquirer_share_price=acquirer_share_price,
+                    acquirer_shares_outstanding=acquirer_shares_outstanding,
+                    acquirer_net_income=acquirer_net_income,
+                    target_net_income=target_net_income or None,
+                    note=financing_note or None,
+                )
+
         st.subheader("Upload documents (optional if web search is enabled below)")
         default_dir = Path("sample_data")
         use_sample = st.checkbox("Use bundled Amazon / Whole Foods sample documents", value=True)
@@ -515,6 +557,7 @@ def page_create_analysis():
                     announcement_date=announcement_date or None,
                     deal_value=deal_value or None,
                     deal_structure=deal_structure or None,
+                    financing=financing,
                     user_notes=user_notes or None,
                 )
                 record = orchestrator.start_analysis(transaction)
@@ -779,8 +822,58 @@ def page_recommendation():
         "Rules: 2+ high-severity reviewer issues combined with a high-severity Red-Team "
         "challenge → do not proceed. Any unresolved high-severity reviewer issue, or citation "
         "coverage under 70%, → further diligence. A clean review with a high-severity Red-Team "
-        "challenge → proceed with conditions. Otherwise → proceed."
+        "challenge → proceed with conditions. Otherwise → proceed. A financing structure that's "
+        "still more than 10% dilutive to EPS at full synergy run-rate also forces further diligence."
     )
+
+    st.divider()
+    st.subheader("Financing & Accretion/Dilution")
+    financing = record.transaction.financing
+    if not financing or not record.transaction.deal_value:
+        st.info(
+            "No financing structure on this analysis. Add one on Create Analysis (cash/stock/debt "
+            "mix, share price, share count, net income) to see the EPS impact of how this deal "
+            "would actually be paid for."
+        )
+    else:
+        if financing.note:
+            st.caption(f"⚠️ {_md(financing.note)}")
+        econ = calculate_accretion_dilution(
+            deal_value=record.transaction.deal_value,
+            cash_pct=financing.cash_pct,
+            stock_pct=financing.stock_pct,
+            debt_pct=financing.debt_pct,
+            new_debt_interest_rate=financing.new_debt_interest_rate,
+            foregone_interest_rate=financing.foregone_interest_rate,
+            acquirer_tax_rate=financing.acquirer_tax_rate,
+            acquirer_share_price=financing.acquirer_share_price,
+            acquirer_shares_outstanding=financing.acquirer_shares_outstanding,
+            acquirer_net_income=financing.acquirer_net_income,
+            target_net_income=financing.target_net_income or 0.0,
+            synergies_after_tax_run_rate=total_value * (1 - financing.acquirer_tax_rate),
+        )
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Standalone EPS", f"${econ['standalone_eps']:.2f}")
+        m2.metric(
+            "Pro forma EPS — Day 1",
+            f"${econ['pro_forma_eps_day1']:.2f}",
+            f"{econ['accretion_dilution_pct_day1']:+.1f}%",
+        )
+        m3.metric(
+            "Pro forma EPS — full run-rate",
+            f"${econ['pro_forma_eps_run_rate']:.2f}",
+            f"{econ['accretion_dilution_pct_run_rate']:+.1f}%",
+        )
+        st.caption(
+            _md(
+                f"Financed with {financing.cash_pct:.0%} cash / {financing.stock_pct:.0%} stock / "
+                f"{financing.debt_pct:.0%} debt — {econ['shares_issued']:,.0f} new shares issued, "
+                f"${econ['new_debt']:,.0f} new debt, after-tax financing drag of "
+                f"${econ['after_tax_interest_expense'] + econ['after_tax_foregone_interest']:,.0f}/year. "
+                "Day 1 reflects financing cost only; full run-rate also credits identified synergies "
+                "(after-tax) into combined net income."
+            )
+        )
 
 def page_100_day_plan():
     _require_record()

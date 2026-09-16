@@ -28,6 +28,7 @@ from schemas.analysis_models import (
     EstimatedValue,
     EvidenceItem,
     FinancialBaseline,
+    FinancingStructure,
     IntegrationAction,
     IntegrationPlan,
     Risk,
@@ -641,6 +642,25 @@ def run_pfizer_seagen_pipeline() -> tuple[AnalysisRecord, list[dict]]:
         announcement_date="2023-03-13",
         deal_value=43_000_000_000,
         deal_structure="All-cash merger",
+        financing=FinancingStructure(
+            cash_pct=0.5,
+            stock_pct=0.3,
+            debt_pct=0.2,
+            new_debt_interest_rate=0.055,
+            foregone_interest_rate=0.05,
+            acquirer_tax_rate=0.15,
+            acquirer_share_price=42.0,
+            acquirer_shares_outstanding=5_670_000_000,
+            acquirer_net_income=8_000_000_000,
+            target_net_income=-400_000_000,
+            note=(
+                "DEMO — illustrative financing mix, not the deal's actual terms. The real "
+                "Pfizer/Seagen transaction was funded with cash and new debt, no stock; this "
+                "scenario adds a hypothetical stock component (and a normalized acquirer net "
+                "income figure, not a reported GAAP number) purely to demonstrate the "
+                "accretion/dilution view on a deal large enough for it to matter."
+            ),
+        ),
         user_notes="Demo mode: synthetic sample documents, no live OpenAI calls.",
     )
     financial_assessment, tool_call_log, baselines = _pfizer_financial_assessment()
