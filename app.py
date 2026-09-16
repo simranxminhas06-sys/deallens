@@ -40,19 +40,19 @@ st.markdown(
     <style>
     [data-testid="stApp"] {
         background:
-            radial-gradient(1100px 550px at 88% -8%, rgba(61, 90, 254, 0.20), transparent 60%),
-            radial-gradient(800px 480px at -8% 105%, rgba(0, 194, 255, 0.12), transparent 55%),
-            #07080D;
+            radial-gradient(1200px 600px at 90% -12%, rgba(37, 84, 232, 0.05), transparent 60%),
+            radial-gradient(900px 520px at -10% 108%, rgba(14, 165, 233, 0.04), transparent 55%),
+            #FFFFFF;
     }
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #10121C 0%, #0A0B12 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        background: #FBFCFE;
+        border-right: 1px solid #E4E9F2;
     }
     [data-testid="stSidebar"] h1 {
         font-size: 1.5rem;
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: -0.01em;
-        background: linear-gradient(90deg, #3D5AFE, #00C2FF);
+        background: linear-gradient(90deg, #2554E8, #0EA5E9);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.25rem;
@@ -60,12 +60,11 @@ st.markdown(
     h1 { letter-spacing: -0.015em; }
     h2, h3 { letter-spacing: -0.01em; }
     [data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.035);
-        border: 1px solid rgba(61, 90, 254, 0.4);
+        background: #F7F9FD;
+        border: 1px solid #DCE4F5;
         border-radius: 14px;
         padding: 0.85rem 1.1rem;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-        backdrop-filter: blur(8px);
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
     [data-testid="stMetricValue"] {
         font-weight: 700;
@@ -88,18 +87,18 @@ st.markdown(
         border-radius: 10px;
         font-weight: 600;
         border: none;
-        background: linear-gradient(135deg, #3D5AFE, #2270FF 55%, #00C2FF) !important;
-        box-shadow: 0 6px 20px rgba(61, 90, 254, 0.4);
+        background: linear-gradient(135deg, #2554E8, #0E7CE0 55%, #0EA5E9) !important;
+        box-shadow: 0 6px 18px rgba(37, 84, 232, 0.28);
         transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
     button[data-testid="stBaseButton-primary"]:hover {
-        box-shadow: 0 8px 26px rgba(61, 90, 254, 0.55);
+        box-shadow: 0 8px 22px rgba(37, 84, 232, 0.4);
         transform: translateY(-1px);
     }
     button[data-testid="stBaseButton-secondary"] {
         border-radius: 10px;
         font-weight: 600;
-        border-color: rgba(255, 255, 255, 0.14);
+        border-color: #D5DCEA;
     }
     </style>
     """,
@@ -305,7 +304,7 @@ def _render_value_waterfall(opportunities, total_value: float) -> None:
     )
     labels = (
         alt.Chart(df)
-        .mark_text(dy=-10, color="#E7ECF5", fontWeight="bold")
+        .mark_text(dy=-10, color="#0F172A", fontWeight="bold")
         .encode(x=alt.X("stage:N", sort=stages), y=alt.Y("end:Q"), text=alt.Text("amount:Q", format="$,.2s"))
     )
     st.altair_chart((bars + labels).properties(height=280), use_container_width=True)
@@ -420,22 +419,27 @@ def page_create_analysis():
     st.header("Create Analysis")
 
     if is_demo:
-        st.info(
-            "Demo mode runs the full pipeline — company profiles, the Strategy/Financial/Red-Team "
-            "independent assessments, risk register, 100-day plan, and reviewer — against a hand-authored "
-            "fixture. No OpenAI calls, no cost. See agent/demo_fixtures.py."
-        )
-        for case in DEMO_CASES:
-            if st.button(f"Load demo case ({case['label']})", key=f"load_demo_{case['label']}", type="primary"):
-                with st.spinner("Running demo pipeline..."):
-                    record, tool_call_log = case["run"]()
-                    record = orchestrator.run_review_stage(record, tool_call_log, case["document_names"])
-                st.session_state.record = record
-                st.session_state.tool_call_log = tool_call_log
-                st.session_state.document_names = case["document_names"]
-                st.session_state.vector_store_id = None
-                save_analysis(record)
-                st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or Sensitivity.")
+        cols = st.columns(len(DEMO_CASES), gap="medium")
+        for col, case in zip(cols, DEMO_CASES):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"#### {case['label']}")
+                    st.caption(case["subtitle"])
+                    st.write(case["detail"])
+                    st.markdown(f"**Lands on:** {case['verdict']}")
+                    st.write("")
+                    if st.button(
+                        "Load this case", key=f"load_demo_{case['label']}", type="primary", use_container_width=True
+                    ):
+                        with st.spinner("Running demo pipeline..."):
+                            record, tool_call_log = case["run"]()
+                            record = orchestrator.run_review_stage(record, tool_call_log, case["document_names"])
+                        st.session_state.record = record
+                        st.session_state.tool_call_log = tool_call_log
+                        st.session_state.document_names = case["document_names"]
+                        st.session_state.vector_store_id = None
+                        save_analysis(record)
+                        st.success("Demo analysis loaded. Continue on Evidence, Independent Assessments, or Sensitivity.")
     else:
         col1, col2 = st.columns(2)
         acquirer_name = col1.text_input("Acquiring company", value="Amazon.com, Inc.")

@@ -39,14 +39,15 @@ doesn't read as tuned to one story:
   Red-Team's objection to the assumed uplift rate is a real, separate basis
   for challenge, landing the verdict on **Proceed with conditions** instead.
 
-The visual theme (navy/charcoal with a bright blue accent) lives in
-[`.streamlit/config.toml`](.streamlit/config.toml) — Streamlit's own theming
-API, not a CSS override — plus a small, deliberately conservative CSS block at
-the top of `app.py` for metric cards, headers, and buttons, targeting only
-`data-testid` attributes (stable across Streamlit versions) rather than its
-internal hashed class names. The verdict banner and evidence-type badges are
-custom-rendered (not `st.success`/`st.warning`) so their colors are consistent
-with the theme instead of Streamlit's default alert palette.
+The visual theme (white background, blue accent, IBM Plex Sans loaded via
+Google Fonts) lives in [`.streamlit/config.toml`](.streamlit/config.toml) —
+Streamlit's own theming API, not a CSS override — plus a small, deliberately
+conservative CSS block at the top of `app.py` for the background wash, sidebar,
+metric cards, headers, and buttons, targeting only `data-testid` attributes
+(stable across Streamlit versions) rather than its internal hashed class
+names. The verdict banner and evidence-type badges are custom-rendered (not
+`st.success`/`st.warning`) so their colors are consistent with the theme
+instead of Streamlit's default alert palette.
 
 ## The business problem
 
