@@ -38,6 +38,16 @@ st.set_page_config(page_title="DealLens", layout="wide", page_icon="📊")
 st.markdown(
     """
     <style>
+    [data-testid="stApp"] {
+        background:
+            radial-gradient(1100px 550px at 88% -8%, rgba(61, 90, 254, 0.20), transparent 60%),
+            radial-gradient(800px 480px at -8% 105%, rgba(0, 194, 255, 0.12), transparent 55%),
+            #07080D;
+    }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #10121C 0%, #0A0B12 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+    }
     [data-testid="stSidebar"] h1 {
         font-size: 1.5rem;
         font-weight: 800;
@@ -50,10 +60,12 @@ st.markdown(
     h1 { letter-spacing: -0.015em; }
     h2, h3 { letter-spacing: -0.01em; }
     [data-testid="stMetric"] {
-        background: rgba(61, 90, 254, 0.14);
-        border: 1px solid rgba(61, 90, 254, 0.55);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(61, 90, 254, 0.4);
+        border-radius: 14px;
+        padding: 0.85rem 1.1rem;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
     }
     [data-testid="stMetricValue"] {
         font-weight: 700;
@@ -72,10 +84,22 @@ st.markdown(
         overflow-wrap: break-word;
     }
     [data-testid="stMetricLabel"] p { white-space: normal; }
-    button[data-testid="stBaseButton-primary"],
-    button[data-testid="stBaseButton-secondary"] {
-        border-radius: 8px;
+    button[data-testid="stBaseButton-primary"] {
+        border-radius: 10px;
         font-weight: 600;
+        border: none;
+        background: linear-gradient(135deg, #3D5AFE, #2270FF 55%, #00C2FF) !important;
+        box-shadow: 0 6px 20px rgba(61, 90, 254, 0.4);
+        transition: box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    button[data-testid="stBaseButton-primary"]:hover {
+        box-shadow: 0 8px 26px rgba(61, 90, 254, 0.55);
+        transform: translateY(-1px);
+    }
+    button[data-testid="stBaseButton-secondary"] {
+        border-radius: 10px;
+        font-weight: 600;
+        border-color: rgba(255, 255, 255, 0.14);
     }
     </style>
     """,

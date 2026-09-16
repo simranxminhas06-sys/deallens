@@ -28,7 +28,7 @@ from schemas.analysis_models import AnalysisRecord
 from tools.financial_calculator import calculate_deal_economics
 
 NAVY = RGBColor(0x1B, 0x2A, 0x4A)
-DARK_BG = RGBColor(0x0B, 0x12, 0x20)
+DARK_BG = RGBColor(0x07, 0x08, 0x0D)
 CARD_BG = RGBColor(0x14, 0x1B, 0x2E)
 CARD_BORDER = RGBColor(0x2A, 0x3B, 0x5C)
 ACCENT = RGBColor(0x3D, 0x5A, 0xFE)
